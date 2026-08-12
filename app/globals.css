@@ -1,26 +1,648 @@
 @import "tailwindcss";
 
+
+/* ============================================================
+   ARRASOU ADMIN
+   VARIÁVEIS GLOBAIS
+============================================================ */
+
 :root {
-  --background: #ffffff;
+  --background: #f5f5f3;
   --foreground: #171717;
+
+  --arrasou-black: #080808;
+  --arrasou-gold: #c9a227;
+  --arrasou-gold-light: #e0c56e;
+  --arrasou-white: #ffffff;
 }
+
+
+/* ============================================================
+   TAILWIND THEME
+============================================================ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background:
+    var(--background);
+
+  --color-foreground:
+    var(--foreground);
+
+  --color-arrasou-black:
+    var(--arrasou-black);
+
+  --color-arrasou-gold:
+    var(--arrasou-gold);
+
+  --color-arrasou-gold-light:
+    var(--arrasou-gold-light);
+
+  --color-arrasou-white:
+    var(--arrasou-white);
+
+  --font-sans:
+    var(--font-geist-sans);
+
+  --font-mono:
+    var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+
+/* ============================================================
+   RESET / BASE
+============================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+
+html {
+  scroll-behavior: smooth;
+}
+
+
+body {
+  margin: 0;
+
+  min-height: 100vh;
+
+  background:
+    var(--background);
+
+  color:
+    var(--foreground);
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+}
+
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+
+button {
+  cursor: pointer;
+}
+
+
+::selection {
+  background:
+    #c9a227;
+
+  color:
+    #080808;
+}
+
+
+/* ============================================================
+   SCROLLBAR
+============================================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+
+::-webkit-scrollbar-track {
+  background:
+    #eeeeec;
+}
+
+
+::-webkit-scrollbar-thumb {
+  background:
+    #c9a227;
+
+  border-radius:
+    999px;
+}
+
+
+::-webkit-scrollbar-thumb:hover {
+  background:
+    #b58f1f;
+}
+
+
+/* ============================================================
+   ARRASOU ADMIN - FULLCALENDAR
+============================================================ */
+
+.arrasou-calendar {
+  /*
+   * Variáveis do tema do FullCalendar.
+   */
+  --fc-border-color:
+    rgba(0, 0, 0, 0.08);
+
+  --fc-page-bg-color:
+    #ffffff;
+
+  --fc-neutral-bg-color:
+    #fafaf8;
+
+  --fc-today-bg-color:
+    rgba(201, 162, 39, 0.06);
+
+  --fc-button-bg-color:
+    #111111;
+
+  --fc-button-border-color:
+    #111111;
+
+  --fc-button-hover-bg-color:
+    #c9a227;
+
+  --fc-button-hover-border-color:
+    #c9a227;
+
+  --fc-button-active-bg-color:
+    #c9a227;
+
+  --fc-button-active-border-color:
+    #c9a227;
+
+  width: 100%;
+}
+
+
+/* Calendário */
+
+.arrasou-calendar .fc {
+  width: 100%;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+}
+
+
+/* ============================================================
+   TOOLBAR
+============================================================ */
+
+.arrasou-calendar
+.fc-header-toolbar {
+  margin-bottom:
+    1.25rem !important;
+}
+
+
+.arrasou-calendar
+.fc-toolbar-title {
+  font-family:
+    Georgia,
+    "Times New Roman",
+    serif;
+
+  font-size:
+    1.35rem !important;
+
+  font-weight:
+    600;
+
+  color:
+    #111111;
+}
+
+
+/* Botões */
+
+.arrasou-calendar
+.fc-button {
+  min-height:
+    36px;
+
+  border-radius:
+    8px !important;
+
+  box-shadow:
+    none !important;
+
+  font-size:
+    0.72rem !important;
+
+  font-weight:
+    600 !important;
+
+  text-transform:
+    capitalize !important;
+
+  transition:
+    all 0.2s ease;
+}
+
+
+.arrasou-calendar
+.fc-button:hover {
+  color:
+    #000000 !important;
+}
+
+
+.arrasou-calendar
+.fc-button-active {
+  color:
+    #000000 !important;
+}
+
+
+/* ============================================================
+   CABEÇALHO DOS DIAS
+============================================================ */
+
+.arrasou-calendar
+.fc-col-header-cell {
+  background:
+    #fafaf8;
+}
+
+
+.arrasou-calendar
+.fc-col-header-cell-cushion {
+  padding:
+    12px 4px !important;
+
+  font-size:
+    0.72rem;
+
+  font-weight:
+    600;
+
+  color:
+    rgba(
+      0,
+      0,
+      0,
+      0.55
+    );
+
+  text-transform:
+    capitalize;
+}
+
+
+/* ============================================================
+   HORÁRIOS
+============================================================ */
+
+.arrasou-calendar
+.fc-timegrid-slot {
+  height:
+    2.8rem;
+}
+
+
+.arrasou-calendar
+.fc-timegrid-slot-label-cushion {
+  padding-right:
+    8px;
+
+  font-size:
+    0.68rem;
+
+  color:
+    rgba(
+      0,
+      0,
+      0,
+      0.4
+    );
+}
+
+
+/* ============================================================
+   DIA ATUAL
+============================================================ */
+
+.arrasou-calendar
+.fc-day-today {
+  background:
+    rgba(
+      201,
+      162,
+      39,
+      0.05
+    ) !important;
+}
+
+
+/* Indicador de hora atual */
+
+.arrasou-calendar
+.fc-timegrid-now-indicator-line {
+  border-color:
+    #c9a227;
+}
+
+
+.arrasou-calendar
+.fc-timegrid-now-indicator-arrow {
+  border-left-color:
+    #c9a227;
+
+  border-right-color:
+    #c9a227;
+}
+
+
+/* ============================================================
+   EVENTOS
+============================================================ */
+
+/*
+ * Algumas classes internas do FullCalendar
+ * mudaram no v7, portanto a aparência principal
+ * dos eventos é definida pelo próprio Event Object
+ * no AgendaCalendar.tsx.
+ *
+ * Mantemos aqui apenas propriedades genéricas
+ * que não comprometem o componente.
+ */
+
+.arrasou-calendar
+a {
+  text-decoration:
+    none;
+}
+
+
+/* ============================================================
+   MOBILE
+============================================================ */
+
+@media (
+  max-width: 767px
+) {
+
+  .arrasou-calendar
+  .fc-header-toolbar {
+    flex-direction:
+      column;
+
+    align-items:
+      stretch !important;
+
+    gap:
+      12px;
+  }
+
+
+  .arrasou-calendar
+  .fc-toolbar-chunk {
+    display:
+      flex;
+
+    justify-content:
+      center;
+  }
+
+
+  .arrasou-calendar
+  .fc-toolbar-title {
+    font-size:
+      1.15rem !important;
+
+    text-align:
+      center;
+  }
+
+
+  .arrasou-calendar
+  .fc-button {
+    min-height:
+      34px;
+
+    padding:
+      0.45rem
+      0.55rem !important;
+
+    font-size:
+      0.65rem !important;
+  }
+
+
+  .arrasou-calendar
+  .fc-col-header-cell-cushion {
+    font-size:
+      0.6rem;
+  }
+
+
+  .arrasou-calendar
+  .fc-timegrid-slot-label-cushion {
+    font-size:
+      0.6rem;
+  }
+
+}
+
+/* ============================================================
+   ARRASOU ADMIN - MOBILE
+============================================================ */
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Evita zoom automático no Safari iOS
+ * em inputs com fonte menor que 16px.
+ */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * Scroll mais discreto em regiões horizontais.
+ */
+@media (max-width: 1023px) {
+  .mobile-scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .mobile-scroll-x::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ============================================================
+   ARRASOU ADMIN
+   FULLCALENDAR MOBILE
+============================================================ */
+
+@media (max-width: 767px) {
+
+  /*
+   * Calendário precisa ocupar exatamente
+   * a largura disponível.
+   */
+  .arrasou-calendar-mobile,
+  .arrasou-calendar-mobile .fc {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /*
+   * Como criamos nossa própria toolbar mobile,
+   * não precisamos reservar espaço para ela.
+   */
+  .arrasou-calendar-mobile .fc-header-toolbar {
+    margin-bottom: 0 !important;
+  }
+
+  /*
+   * Cabeçalho do dia.
+   */
+  .arrasou-calendar-mobile .fc-col-header-cell {
+    background: #fafaf8;
+  }
+
+  .arrasou-calendar-mobile .fc-col-header-cell-cushion {
+    display: block;
+    padding: 12px 6px !important;
+
+    font-size: 11px !important;
+    font-weight: 600;
+
+    line-height: 1.3;
+
+    color: #111111 !important;
+
+    text-align: center;
+    text-transform: capitalize;
+  }
+
+  /*
+   * Largura da coluna de horários.
+   */
+  .arrasou-calendar-mobile .fc-timegrid-axis {
+    width: 48px !important;
+    min-width: 48px !important;
+  }
+
+  /*
+   * Horários laterais.
+   */
+  .arrasou-calendar-mobile .fc-timegrid-slot-label {
+    width: 48px !important;
+  }
+
+  .arrasou-calendar-mobile .fc-timegrid-slot-label-cushion {
+    padding-right: 7px !important;
+
+    font-size: 10px !important;
+
+    color: rgba(0, 0, 0, 0.42) !important;
+  }
+
+  /*
+   * Cada intervalo de 30 minutos fica
+   * um pouco mais alto para facilitar toque.
+   */
+  .arrasou-calendar-mobile .fc-timegrid-slot {
+    height: 31px !important;
+  }
+
+  /*
+   * Eventos.
+   */
+  .arrasou-calendar-mobile .fc-timegrid-event {
+    border-radius: 8px !important;
+
+    overflow: hidden;
+
+    box-shadow: none !important;
+  }
+
+  .arrasou-calendar-mobile .fc-event-main {
+    padding: 0 !important;
+  }
+
+  /*
+   * Hoje.
+   */
+  .arrasou-calendar-mobile .fc-day-today {
+    background:
+      rgba(
+        201,
+        162,
+        39,
+        0.045
+      ) !important;
+  }
+
+  /*
+   * Linha do horário atual.
+   */
+  .arrasou-calendar-mobile
+    .fc-timegrid-now-indicator-line {
+    border-color: #c9a227 !important;
+
+    border-width: 2px 0 0 !important;
+  }
+
+  /*
+   * Remove pequenos excessos de largura.
+   */
+  .arrasou-calendar-mobile .fc-scrollgrid,
+  .arrasou-calendar-mobile table {
+    max-width: 100%;
+  }
+
+  /*
+   * MÊS MOBILE
+   */
+  .arrasou-calendar-mobile
+    .fc-dayGridMonth-view
+    .fc-daygrid-day-number {
+    padding: 7px !important;
+
+    font-size: 11px;
+  }
+
+  .arrasou-calendar-mobile
+    .fc-dayGridMonth-view
+    .fc-col-header-cell-cushion {
+    font-size: 9px !important;
+  }
+
+  /*
+   * No mês, eventos precisam ser compactos.
+   */
+  .arrasou-calendar-mobile
+    .fc-dayGridMonth-view
+    .fc-event {
+    margin: 1px 2px !important;
+
+    border-radius: 5px !important;
+
+    font-size: 8px !important;
+  }
 }
