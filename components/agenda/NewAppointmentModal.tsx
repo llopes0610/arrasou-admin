@@ -35,12 +35,12 @@ type NewAppointmentModalProps = {
   open: boolean;
 
   selectedDate:
-    | string
-    | null;
+  | string
+  | null;
 
   currentUserRole:
-    | "admin"
-    | "professional";
+  | "admin"
+  | "professional";
 
   onClose: () => void;
 
@@ -75,8 +75,8 @@ type Service = {
    * da tipagem/configuração.
    */
   price:
-    | number
-    | string;
+  | number
+  | string;
 
   duration_minutes: number;
   active: boolean;
@@ -92,18 +92,16 @@ type ProfessionalServiceQueryRow = {
   service_id: string;
 
   commission_percentage:
-    | number
-    | string
-    | null;
+  | number
+  | string
+  | null;
 
   active: boolean;
 
-  /*
-   * A relação está vindo como array.
-   */
   services:
-    | Service[]
-    | null;
+  | Service
+  | Service[]
+  | null;
 };
 
 /*
@@ -116,9 +114,9 @@ type ProfessionalService = {
   service_id: string;
 
   commission_percentage:
-    | number
-    | string
-    | null;
+  | number
+  | string
+  | null;
 
   active: boolean;
 
@@ -273,7 +271,7 @@ export default function NewAppointmentModal({
         .filter(
           (item) =>
             item.professional_id ===
-              selectedProfessional &&
+            selectedProfessional &&
             item.active &&
             item.service.active
         )
@@ -311,19 +309,19 @@ export default function NewAppointmentModal({
   const formattedPrice =
     currentService
       ? new Intl.NumberFormat(
-          "pt-BR",
-          {
-            style:
-              "currency",
+        "pt-BR",
+        {
+          style:
+            "currency",
 
-            currency:
-              "BRL",
-          }
-        ).format(
-          Number(
-            currentService.price
-          )
+          currency:
+            "BRL",
+        }
+      ).format(
+        Number(
+          currentService.price
         )
+      )
       : "R$ 0,00";
 
   /* ==========================================================
@@ -478,8 +476,17 @@ export default function NewAppointmentModal({
               ):
                 | ProfessionalService
                 | null => {
+                /*
+                 * O Supabase pode representar
+                 * a relação como objeto ou array,
+                 * dependendo da inferência da FK.
+                 */
                 const service =
-                  row.services?.[0];
+                  Array.isArray(
+                    row.services
+                  )
+                    ? row.services[0]
+                    : row.services;
 
                 if (!service) {
                   return null;
@@ -543,7 +550,7 @@ export default function NewAppointmentModal({
          */
         if (
           currentUserRole ===
-            "professional"
+          "professional"
         ) {
           if (
             professionalRows.length ===
@@ -562,7 +569,7 @@ export default function NewAppointmentModal({
           }
         }
       } catch (
-        loadError
+      loadError
       ) {
         console.error(
           "Erro ao carregar dados do agendamento:",
@@ -906,7 +913,7 @@ export default function NewAppointmentModal({
 
       const {
         error:
-          rpcError,
+        rpcError,
       } =
         await supabase.rpc(
           "create_appointment",
@@ -985,7 +992,7 @@ export default function NewAppointmentModal({
 
       await onCreated();
     } catch (
-      submitError
+    submitError
     ) {
       console.error(
         "Erro ao criar agendamento:",
@@ -1231,7 +1238,7 @@ export default function NewAppointmentModal({
                       }
                       disabled={
                         currentUserRole ===
-                          "professional" ||
+                        "professional" ||
                         loading
                       }
                       required
@@ -1460,10 +1467,9 @@ export default function NewAppointmentModal({
                         font-semibold
                         transition-all
 
-                        ${
-                          !createNewClient
-                            ? "bg-white text-[#111] shadow-sm"
-                            : "text-black/40"
+                        ${!createNewClient
+                          ? "bg-white text-[#111] shadow-sm"
+                          : "text-black/40"
                         }
                       `}
                     >
@@ -1486,10 +1492,9 @@ export default function NewAppointmentModal({
                         font-semibold
                         transition-all
 
-                        ${
-                          createNewClient
-                            ? "bg-white text-[#111] shadow-sm"
-                            : "text-black/40"
+                        ${createNewClient
+                          ? "bg-white text-[#111] shadow-sm"
+                          : "text-black/40"
                         }
                       `}
                     >
@@ -2175,14 +2180,14 @@ function calculateEndTime(
 
   const totalMinutes =
     hours *
-      60 +
+    60 +
     minutes +
     durationMinutes;
 
   const endHours =
     Math.floor(
       totalMinutes /
-        60
+      60
     ) %
     24;
 
