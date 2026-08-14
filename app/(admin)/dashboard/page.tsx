@@ -18,6 +18,36 @@ type AppointmentStatus =
   | "canceled"
   | "no_show";
 
+type SupabaseRelation<T> =
+  | T
+  | T[]
+  | null;
+
+function getRelation<T>(
+  relation: SupabaseRelation<T>
+): T | null {
+  if (!relation) {
+    return null;
+  }
+
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+
+  return relation;
+}
+
+type ClientRelation = {
+  id: string;
+  full_name: string;
+  phone: string | null;
+};
+
+type ProfessionalRelation = {
+  id: string;
+  display_name: string;
+};
+
 type TodayAppointment = {
   id: string;
 
@@ -27,35 +57,26 @@ type TodayAppointment = {
   status: AppointmentStatus;
 
   clients:
-    | {
-        id: string;
-        full_name: string;
-        phone: string | null;
-      }[]
-    | null;
+    SupabaseRelation<ClientRelation>;
 
   professionals:
-    | {
-        id: string;
-        display_name: string;
-      }[]
-    | null;
+    SupabaseRelation<ProfessionalRelation>;
 
   appointment_services:
     | {
         id: string;
         service_name: string;
         unit_price: number | string;
+        commission_percentage: number | string;
       }[]
     | null;
 };
 
-type FinancialEntry = {
-  gross_amount: number | string;
-
-  professional_amount: number | string;
-
-  studio_amount: number | string;
+type ProfessionalCommission = {
+  professionalId: string;
+  professionalName: string;
+  amount: number;
+  appointments: number;
 };
 
 export default async function DashboardPage() {
@@ -120,81 +141,60 @@ export default async function DashboardPage() {
      CONSULTAS
   ========================================================== */
 
-  const [
-    appointmentsResult,
-    financialResult,
-  ] =
-    await Promise.all([
-      supabase
-        .from("appointments")
-        .select(`
+  const appointmentsResult =
+    await supabase
+      .from("appointments")
+      .select(`
+        id,
+        start_at,
+        end_at,
+        status,
+
+        clients (
           id,
-          start_at,
-          end_at,
-          status,
-
-          clients (
-            id,
-            full_name,
-            phone
-          ),
-
-          professionals (
-            id,
-            display_name
-          ),
-
-          appointment_services (
-            id,
-            service_name,
-            unit_price
-          )
-        `)
-        .gte(
-          "start_at",
-          startOfDay
-        )
-        .lte(
-          "start_at",
-          endOfDay
-        )
-        .order(
-          "start_at",
-          {
-            ascending: true,
-          }
+          full_name,
+          phone
         ),
 
-      supabase
-        .from(
-          "financial_entries"
-        )
-        .select(`
-          gross_amount,
-          professional_amount,
-          studio_amount
-        `)
-        .gte(
-          "created_at",
-          startOfDay
-        )
-        .lte(
-          "created_at",
-          endOfDay
+        professionals (
+          id,
+          display_name
         ),
-    ]);
+
+        appointment_services (
+          id,
+          service_name,
+          unit_price,
+          commission_percentage
+        )
+      `)
+      .gte(
+        "start_at",
+        startOfDay
+      )
+      .lte(
+        "start_at",
+        endOfDay
+      )
+      .order(
+        "start_at",
+        {
+          ascending: true,
+        }
+      );
+
+  if (appointmentsResult.error) {
+    console.error(
+      "Erro ao carregar dashboard:",
+      appointmentsResult.error
+    );
+  }
 
   const appointments =
     (
       appointmentsResult.data ??
       []
     ) as unknown as TodayAppointment[];
-
-  const financialEntries =
-    (
-      financialResult.data ??
-      []
-    ) as unknown as FinancialEntry[];
 
   /* ==========================================================
      INDICADORES
@@ -214,44 +214,137 @@ export default async function DashboardPage() {
         "completed"
     );
 
+  /*
+   * O Dashboard é uma visão operacional DO DIA.
+   *
+   * Faturamento e comissão são calculados apenas sobre
+   * atendimentos concluídos cuja data do atendimento é hoje.
+   * Assim, lançamentos financeiros criados em outro momento
+   * não contaminam os indicadores do dia.
+   */
+
   const grossRevenue =
-    financialEntries.reduce(
+    completedAppointments.reduce(
       (
         total,
-        entry
+        appointment
       ) =>
         total +
-        Number(
-          entry.gross_amount
+        (
+          appointment.appointment_services ??
+          []
+        ).reduce(
+          (
+            serviceTotal,
+            service
+          ) =>
+            serviceTotal +
+            Number(
+              service.unit_price
+            ),
+          0
         ),
       0
     );
 
+  const commissionMap =
+    new Map<
+      string,
+      ProfessionalCommission
+    >();
+
+  completedAppointments.forEach(
+    (
+      appointment
+    ) => {
+      const professional =
+        getRelation(
+          appointment.professionals
+        );
+
+      const professionalId =
+        professional?.id ??
+        "sem-profissional";
+
+      const professionalName =
+        professional?.display_name ??
+        "Profissional";
+
+      const appointmentCommission =
+        (
+          appointment.appointment_services ??
+          []
+        ).reduce(
+          (
+            total,
+            service
+          ) =>
+            total +
+            Number(
+              service.unit_price
+            ) *
+              (
+                Number(
+                  service.commission_percentage
+                ) /
+                100
+              ),
+          0
+        );
+
+      const current =
+        commissionMap.get(
+          professionalId
+        );
+
+      if (current) {
+        current.amount +=
+          appointmentCommission;
+
+        current.appointments += 1;
+
+        return;
+      }
+
+      commissionMap.set(
+        professionalId,
+        {
+          professionalId,
+          professionalName,
+          amount:
+            appointmentCommission,
+          appointments: 1,
+        }
+      );
+    }
+  );
+
+  const professionalCommissions =
+    Array.from(
+      commissionMap.values()
+    ).sort(
+      (
+        a,
+        b
+      ) =>
+        b.amount -
+        a.amount
+    );
+
   const professionalAmount =
-    financialEntries.reduce(
+    professionalCommissions.reduce(
       (
         total,
-        entry
+        professional
       ) =>
         total +
-        Number(
-          entry.professional_amount
-        ),
+        professional.amount,
       0
     );
 
   const studioAmount =
-    financialEntries.reduce(
-      (
-        total,
-        entry
-      ) =>
-        total +
-        Number(
-          entry.studio_amount
-        ),
-      0
-    );
+    grossRevenue -
+    professionalAmount;
 
   return (
     <div
@@ -559,6 +652,243 @@ export default async function DashboardPage() {
               </div>
             </div>
           </div>
+        </section>
+      )}
+
+      {/* =====================================================
+          COMISSÕES POR PROFISSIONAL
+          SOMENTE ADMIN - VISÃO DO DIA
+      ====================================================== */}
+
+      {isAdmin && (
+        <section
+          className="
+            mt-6
+            overflow-hidden
+            rounded-2xl
+            border
+            border-black/10
+            bg-white
+          "
+        >
+          <div
+            className="
+              flex
+              flex-col
+              gap-2
+              border-b
+              border-black/[0.06]
+              px-4
+              py-4
+
+              sm:flex-row
+              sm:items-center
+              sm:justify-between
+              sm:px-6
+              sm:py-5
+            "
+          >
+            <div>
+              <p
+                className="
+                  text-[9px]
+                  font-semibold
+                  uppercase
+                  tracking-[0.16em]
+                  text-[#C9A227]
+                "
+              >
+                Hoje
+              </p>
+
+              <h2
+                className="
+                  mt-1
+                  font-serif
+                  text-xl
+                  font-semibold
+                  text-[#111]
+
+                  sm:text-2xl
+                "
+              >
+                Comissões por profissional
+              </h2>
+
+              <p
+                className="
+                  mt-1
+                  text-xs
+                  text-black/40
+                "
+              >
+                Valores gerados pelos atendimentos concluídos hoje.
+              </p>
+            </div>
+
+            <div
+              className="
+                w-fit
+                rounded-xl
+                bg-[#F8F1D9]
+                px-4
+                py-2
+                text-sm
+                font-bold
+                text-[#8A6D0A]
+              "
+            >
+              {formatCurrency(
+                professionalAmount
+              )}
+            </div>
+          </div>
+
+          {professionalCommissions.length ===
+          0 ? (
+            <div
+              className="
+                px-6
+                py-8
+                text-center
+                text-sm
+                text-black/40
+              "
+            >
+              Nenhuma comissão gerada hoje.
+            </div>
+          ) : (
+            <div
+              className="
+                grid
+                gap-3
+                p-4
+
+                sm:grid-cols-2
+                sm:p-6
+
+                xl:grid-cols-3
+              "
+            >
+              {professionalCommissions.map(
+                (
+                  professional
+                ) => (
+                  <div
+                    key={
+                      professional.professionalId
+                    }
+                    className="
+                      rounded-xl
+                      border
+                      border-black/[0.07]
+                      bg-[#FAFAF8]
+                      p-4
+                    "
+                  >
+                    <div
+                      className="
+                        flex
+                        items-center
+                        gap-3
+                      "
+                    >
+                      <div
+                        className="
+                          flex
+                          h-10
+                          w-10
+                          shrink-0
+                          items-center
+                          justify-center
+                          rounded-xl
+                          bg-[#C9A227]/10
+                        "
+                      >
+                        <UserRound
+                          className="
+                            h-4
+                            w-4
+                            text-[#C9A227]
+                          "
+                        />
+                      </div>
+
+                      <div
+                        className="
+                          min-w-0
+                          flex-1
+                        "
+                      >
+                        <p
+                          className="
+                            truncate
+                            text-sm
+                            font-semibold
+                            text-[#111]
+                          "
+                        >
+                          {
+                            professional.professionalName
+                          }
+                        </p>
+
+                        <p
+                          className="
+                            mt-0.5
+                            text-[10px]
+                            text-black/40
+                          "
+                        >
+                          {
+                            professional.appointments
+                          }{" "}
+                          {professional.appointments ===
+                          1
+                            ? "atendimento concluído"
+                            : "atendimentos concluídos"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      className="
+                        mt-4
+                        border-t
+                        border-black/[0.06]
+                        pt-3
+                      "
+                    >
+                      <p
+                        className="
+                          text-[9px]
+                          font-semibold
+                          uppercase
+                          tracking-wider
+                          text-black/35
+                        "
+                      >
+                        Comissão do dia
+                      </p>
+
+                      <p
+                        className="
+                          mt-1
+                          text-xl
+                          font-bold
+                          text-[#111]
+                        "
+                      >
+                        {formatCurrency(
+                          professional.amount
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -937,13 +1267,14 @@ function MobileAppointmentItem({
     boolean;
 }) {
   const client =
-    appointment.clients?.[0] ??
-    null;
+    getRelation(
+      appointment.clients
+    );
 
   const professional =
-    appointment
-      .professionals?.[0] ??
-    null;
+    getRelation(
+      appointment.professionals
+    );
 
   const service =
     appointment
@@ -1209,13 +1540,14 @@ function DesktopAppointmentItem({
     boolean;
 }) {
   const client =
-    appointment.clients?.[0] ??
-    null;
+    getRelation(
+      appointment.clients
+    );
 
   const professional =
-    appointment
-      .professionals?.[0] ??
-    null;
+    getRelation(
+      appointment.professionals
+    );
 
   const service =
     appointment
