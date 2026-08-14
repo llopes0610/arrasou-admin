@@ -65,6 +65,25 @@ type ProfessionalRelation = {
   display_name: string;
 };
 
+type SupabaseRelation<T> =
+  | T
+  | T[]
+  | null;
+
+function getRelation<T>(
+  relation: SupabaseRelation<T>
+): T | null {
+  if (!relation) {
+    return null;
+  }
+
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+
+  return relation;
+}
+
 type AppointmentServiceRelation = {
   id: string;
   service_name: string;
@@ -88,12 +107,10 @@ type AppointmentRow = {
     | null;
 
   clients:
-    | ClientRelation[]
-    | null;
+    SupabaseRelation<ClientRelation>;
 
   professionals:
-    | ProfessionalRelation[]
-    | null;
+    SupabaseRelation<ProfessionalRelation>;
 
   appointment_services:
     | AppointmentServiceRelation[]
@@ -380,14 +397,14 @@ export default function AgendaCalendar({
                 appointment
               ) => {
                 const client =
-                  appointment
-                    .clients?.[0] ??
-                  null;
+                  getRelation(
+                    appointment.clients
+                  );
 
                 const professional =
-                  appointment
-                    .professionals?.[0] ??
-                  null;
+                  getRelation(
+                    appointment.professionals
+                  );
 
                 const service =
                   appointment

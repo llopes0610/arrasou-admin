@@ -58,6 +58,25 @@ type ProfessionalRelation = {
   display_name: string;
 };
 
+type SupabaseRelation<T> =
+  | T
+  | T[]
+  | null;
+
+function getRelation<T>(
+  relation: SupabaseRelation<T>
+): T | null {
+  if (!relation) {
+    return null;
+  }
+
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+
+  return relation;
+}
+
 type AppointmentService = {
   id: string;
   service_name: string;
@@ -73,8 +92,8 @@ type AppointmentDetails = {
   notes: string | null;
   payment_method: PaymentMethod | null;
   completed_at: string | null;
-  clients: ClientRelation[] | null;
-  professionals: ProfessionalRelation[] | null;
+  clients: SupabaseRelation<ClientRelation>;
+  professionals: SupabaseRelation<ProfessionalRelation>;
   appointment_services: AppointmentService[];
 };
 
@@ -223,8 +242,19 @@ export default function AppointmentDetailsModal({
     }
   }
 
-  const client = appointment?.clients?.[0] ?? null;
-  const professional = appointment?.professionals?.[0] ?? null;
+  const client =
+    appointment
+      ? getRelation(
+          appointment.clients
+        )
+      : null;
+
+  const professional =
+    appointment
+      ? getRelation(
+          appointment.professionals
+        )
+      : null;
 
   const grossTotal =
     appointment?.appointment_services.reduce(
