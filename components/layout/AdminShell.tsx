@@ -17,10 +17,12 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  MonitorUp,
   Settings,
   Sparkles,
   UserRound,
   UsersRound,
+  Wallet,
   WalletCards,
   X,
 } from "lucide-react";
@@ -71,6 +73,18 @@ const navigation = [
     href: "/financeiro",
     icon: WalletCards,
     adminOnly: false,
+  },
+  {
+    label: "Movimentações",
+    href: "/financeiro/movimentacoes",
+    icon: MonitorUp,
+    adminOnly: true,
+  },
+    {
+    label: "Fechamento",
+    href: "/financeiro/fechamento",
+    icon: Wallet,
+    adminOnly: true,
   },
   {
     label: "Configurações",
