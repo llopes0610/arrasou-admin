@@ -26,6 +26,8 @@ import {
 
 import { createClient } from "@/lib/supabase/client";
 
+import RescheduleAppointmentModal from "./RescheduleAppointmentModal";
+
 type AppointmentStatus =
   | "scheduled"
   | "confirmed"
@@ -112,6 +114,13 @@ export default function AppointmentDetailsModal({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showComplete, setShowComplete] = useState(false);
+
+  const [
+    showReschedule,
+    setShowReschedule,
+  ] =
+    useState(false);
+
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("pix");
 
@@ -177,6 +186,7 @@ export default function AppointmentDetailsModal({
     setError("");
     setSuccess("");
     setShowComplete(false);
+    setShowReschedule(false);
     setPaymentMethod("pix");
   }, [open]);
 
@@ -276,8 +286,9 @@ export default function AppointmentDetailsModal({
   if (!open || !appointmentId) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[110] flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center sm:p-4"
+    <>
+      <div
+        className="fixed inset-0 z-[110] flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => {
         if (!actionLoading) onClose();
       }}
@@ -487,6 +498,18 @@ export default function AppointmentDetailsModal({
 
         {!loading && appointment && !showComplete && (
           <div className="shrink-0 border-t border-black/10 bg-white px-5 py-4 sm:px-6">
+            {appointment.status !== "completed" && (
+              <button
+                type="button"
+                onClick={() => setShowReschedule(true)}
+                disabled={actionLoading}
+                className="mb-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#C9A227]/40 bg-[#C9A227]/5 text-sm font-semibold text-[#8A6D0A] transition-all hover:bg-[#C9A227]/10 disabled:opacity-50"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Remarcar atendimento
+              </button>
+            )}
+
             {appointment.status !== "completed" &&
               appointment.status !== "canceled" && (
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -529,7 +552,7 @@ export default function AppointmentDetailsModal({
                 type="button"
                 onClick={() => void updateStatus("scheduled")}
                 disabled={actionLoading}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-black/10 text-sm font-semibold text-black/60 disabled:opacity-50"
+                className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-black/10 text-sm font-semibold text-black/60 disabled:opacity-50"
               >
                 <RefreshCw className="h-4 w-4" />
                 Reativar agendamento
@@ -539,6 +562,49 @@ export default function AppointmentDetailsModal({
         )}
       </div>
     </div>
+
+      <RescheduleAppointmentModal
+        open={
+          showReschedule
+        }
+        appointmentId={
+          appointment?.id ??
+          null
+        }
+        currentStartAt={
+          appointment?.start_at ??
+          null
+        }
+        currentEndAt={
+          appointment?.end_at ??
+          null
+        }
+        clientName={
+          client?.full_name ??
+          "Cliente"
+        }
+        serviceName={
+          appointment
+            ?.appointment_services?.[0]
+            ?.service_name ??
+          "Atendimento"
+        }
+        onClose={() =>
+          setShowReschedule(
+            false
+          )
+        }
+        onUpdated={async () => {
+          setSuccess(
+            "Atendimento remarcado com sucesso."
+          );
+
+          await loadAppointment();
+
+          await onUpdated();
+        }}
+      />
+    </>
   );
 }
 
@@ -633,11 +699,11 @@ function StatusBadge({ status }: { status: AppointmentStatus }) {
     },
     canceled: {
       label: "Cancelado",
-      className: "bg-neutral-100 text-neutral-500",
+      className: "bg-red-100 text-red-700",
     },
     no_show: {
       label: "Faltou",
-      className: "bg-red-100 text-red-700",
+      className: "bg-amber-100 text-amber-800",
     },
   }[status];
 

@@ -1322,25 +1322,25 @@ function getStatusColors(
     case "no_show":
       return {
         backgroundColor:
-          "#FEE2E2",
+          "#F59E0B",
 
         borderColor:
-          "#EF4444",
+          "#D97706",
 
         textColor:
-          "#991B1B",
+          "#111111",
       };
 
     case "canceled":
       return {
         backgroundColor:
-          "#E5E5E5",
+          "#DC2626",
 
         borderColor:
-          "#D4D4D4",
+          "#B91C1C",
 
         textColor:
-          "#737373",
+          "#FFFFFF",
       };
 
     case "scheduled":
