@@ -424,8 +424,9 @@ export default function AgendaCalendar({
                   "Atendimento";
 
                 const colors =
-                  getStatusColors(
-                    appointment.status
+                  getAppointmentColors(
+                    appointment.status,
+                    professionalName
                   );
 
                 return {
@@ -608,6 +609,72 @@ export default function AgendaCalendar({
       ?.changeView(
         view
       );
+  }
+
+  /* ==========================================================
+     APLICAR CORES DOS CARDS
+
+     O tema Classic do FullCalendar pode sobrescrever
+     as cores configuradas no objeto do evento.
+     Por isso aplicamos também as variáveis CSS e estilos
+     diretamente no elemento renderizado.
+  ========================================================== */
+
+  function handleEventDidMount(
+    info: {
+      el: HTMLElement;
+
+      event: {
+        extendedProps:
+          Record<
+            string,
+            unknown
+          >;
+      };
+    }
+  ) {
+    const props =
+      info.event.extendedProps as
+        CalendarEvent["extendedProps"];
+
+    const colors =
+      getAppointmentColors(
+        props.status,
+        props.professionalName
+      );
+
+    info.el.style.setProperty(
+      "--fc-event-bg-color",
+      colors.backgroundColor
+    );
+
+    info.el.style.setProperty(
+      "--fc-event-border-color",
+      colors.borderColor
+    );
+
+    info.el.style.setProperty(
+      "--fc-event-text-color",
+      colors.textColor
+    );
+
+    info.el.style.setProperty(
+      "background-color",
+      colors.backgroundColor,
+      "important"
+    );
+
+    info.el.style.setProperty(
+      "border-color",
+      colors.borderColor,
+      "important"
+    );
+
+    info.el.style.setProperty(
+      "color",
+      colors.textColor,
+      "important"
+    );
   }
 
   /* ==========================================================
@@ -1033,6 +1100,10 @@ export default function AgendaCalendar({
                 handleEventClick
               }
 
+              eventDidMount={
+                handleEventDidMount
+              }
+
               eventTimeFormat={{
                 hour:
                   "2-digit",
@@ -1157,6 +1228,38 @@ export default function AgendaCalendar({
                           "admin" &&
                           ` • ${props.professionalName}`}
                       </p>
+
+                      {props.status ===
+                        "canceled" && (
+                        <p
+                          className="
+                            mt-0.5
+                            truncate
+                            text-[9px]
+                            font-bold
+                            uppercase
+                            tracking-wide
+                          "
+                        >
+                          Cancelado
+                        </p>
+                      )}
+
+                      {props.status ===
+                        "no_show" && (
+                        <p
+                          className="
+                            mt-0.5
+                            truncate
+                            text-[9px]
+                            font-bold
+                            uppercase
+                            tracking-wide
+                          "
+                        >
+                          Faltou
+                        </p>
+                      )}
                     </div>
                   );
                 }
@@ -1217,6 +1320,38 @@ export default function AgendaCalendar({
                         {
                           props.professionalName
                         }
+                      </p>
+                    )}
+
+                    {props.status ===
+                      "canceled" && (
+                      <p
+                        className="
+                          mt-0.5
+                          truncate
+                          text-[9px]
+                          font-bold
+                          uppercase
+                          tracking-wide
+                        "
+                      >
+                        Cancelado
+                      </p>
+                    )}
+
+                    {props.status ===
+                      "no_show" && (
+                      <p
+                        className="
+                          mt-0.5
+                          truncate
+                          text-[9px]
+                          font-bold
+                          uppercase
+                          tracking-wide
+                        "
+                      >
+                        Faltou
                       </p>
                     )}
                   </div>
@@ -1288,72 +1423,158 @@ export default function AgendaCalendar({
    CORES
 ============================================================ */
 
-function getStatusColors(
+/*
+ * Hierarquia visual da agenda:
+ *
+ * 1. Cancelado / falta / concluído
+ *    sempre têm prioridade.
+ *
+ * 2. Agendado e confirmado são diferenciados
+ *    pela profissional.
+ *
+ * Isso permite identificar rapidamente:
+ *
+ * THAYS       → azul
+ * MANICURE    → roxo
+ * CANCELADO   → vermelho
+ * FALTOU      → amarelo
+ * CONCLUÍDO   → verde
+ */
+function getAppointmentColors(
   status:
-    AppointmentStatus
+    AppointmentStatus,
+  professionalName:
+    string
 ) {
-  switch (
-    status
+  /*
+   * ==========================================================
+   * STATUS OPERACIONAIS
+   * ==========================================================
+   */
+
+  if (
+    status ===
+    "canceled"
   ) {
-    case "confirmed":
-      return {
-        backgroundColor:
-          "#111111",
+    return {
+      backgroundColor:
+        "#DC2626",
 
-        borderColor:
-          "#111111",
+      borderColor:
+        "#B91C1C",
 
-        textColor:
-          "#FFFFFF",
-      };
-
-    case "completed":
-      return {
-        backgroundColor:
-          "#C9A227",
-
-        borderColor:
-          "#C9A227",
-
-        textColor:
-          "#000000",
-      };
-
-    case "no_show":
-      return {
-        backgroundColor:
-          "#F59E0B",
-
-        borderColor:
-          "#D97706",
-
-        textColor:
-          "#111111",
-      };
-
-    case "canceled":
-      return {
-        backgroundColor:
-          "#DC2626",
-
-        borderColor:
-          "#B91C1C",
-
-        textColor:
-          "#FFFFFF",
-      };
-
-    case "scheduled":
-    default:
-      return {
-        backgroundColor:
-          "#F4EAC8",
-
-        borderColor:
-          "#C9A227",
-
-        textColor:
-          "#111111",
-      };
+      textColor:
+        "#FFFFFF",
+    };
   }
+
+  if (
+    status ===
+    "no_show"
+  ) {
+    return {
+      backgroundColor:
+        "#FBBF24",
+
+      borderColor:
+        "#D97706",
+
+      textColor:
+        "#111111",
+    };
+  }
+
+  if (
+    status ===
+    "completed"
+  ) {
+    return {
+      backgroundColor:
+        "#16A34A",
+
+      borderColor:
+        "#15803D",
+
+      textColor:
+        "#FFFFFF",
+    };
+  }
+
+  /*
+   * ==========================================================
+   * AGENDAMENTOS ATIVOS
+   *
+   * scheduled / confirmed
+   * ==========================================================
+   */
+
+  const normalizedProfessionalName =
+    professionalName
+      .normalize("NFD")
+      .replace(
+        /[\u0300-\u036f]/g,
+        ""
+      )
+      .trim()
+      .toLowerCase();
+
+  /*
+   * MANICURE
+   */
+  if (
+    normalizedProfessionalName.includes(
+      "manicure"
+    )
+  ) {
+    return {
+      backgroundColor:
+        "#7C3AED",
+
+      borderColor:
+        "#6D28D9",
+
+      textColor:
+        "#FFFFFF",
+    };
+  }
+
+  /*
+   * THAYS / SOBRANCELHAS
+   */
+  if (
+    normalizedProfessionalName.includes(
+      "thays"
+    )
+  ) {
+    return {
+      backgroundColor:
+        "#2563EB",
+
+      borderColor:
+        "#1D4ED8",
+
+      textColor:
+        "#FFFFFF",
+    };
+  }
+
+  /*
+   * ==========================================================
+   * FALLBACK
+   *
+   * Caso outra profissional seja criada
+   * e ainda não tenha cor definida.
+   * ==========================================================
+   */
+
+  return {
+    backgroundColor:
+      "#F4EAC8",
+
+    borderColor:
+      "#C9A227",
+
+    textColor:
+      "#111111",
+  };
 }
