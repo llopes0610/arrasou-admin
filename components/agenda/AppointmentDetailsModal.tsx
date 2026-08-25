@@ -27,6 +27,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 
 import RescheduleAppointmentModal from "./RescheduleAppointmentModal";
+import AppointmentAnamnesisCard from "./AppointmentAnamnesisCard";
 
 type AppointmentStatus =
   | "scheduled"
@@ -360,6 +361,23 @@ export default function AppointmentDetailsModal({
                   {professional?.display_name ?? "Profissional"}
                 </p>
               </InfoSection>
+
+              {client && (
+                <AppointmentAnamnesisCard
+                  appointmentId={
+                    appointment.id
+                  }
+                  clientId={
+                    client.id
+                  }
+                  clientName={
+                    client.full_name
+                  }
+                  clientPhone={
+                    client.phone
+                  }
+                />
+              )}
 
               <InfoSection title="Data e horário" icon={CalendarDays}>
                 <div className="grid gap-3 sm:grid-cols-2">

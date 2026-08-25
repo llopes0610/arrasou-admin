@@ -237,19 +237,19 @@ export default function LoginForm() {
              */
 
             if (
-  profile.access_scope ===
-  "agenda_only"
-) {
-  router.replace(
-    "/agenda"
-  );
-} else {
-  router.replace(
-    "/dashboard"
-  );
-}
+                profile.access_scope ===
+                "agenda_only"
+            ) {
+                router.replace(
+                    "/agenda"
+                );
+            } else {
+                router.replace(
+                    "/dashboard"
+                );
+            }
 
-router.refresh();
+            router.refresh();
 
             router.refresh();
         } catch (

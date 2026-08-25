@@ -10,12 +10,17 @@ import {
   Check,
   Clipboard,
   ExternalLink,
+  Eye,
   FileText,
   Loader2,
   MessageCircle,
   Plus,
   RefreshCw,
 } from "lucide-react";
+
+import AnamnesisDetailsModal, {
+  type AnamnesisFormData,
+} from "@/components/anamnese/AnamnesisDetailsModal";
 
 type AnamnesisRequest = {
   id: string;
@@ -26,6 +31,10 @@ type AnamnesisRequest = {
     | "completed"
     | "expired"
     | "canceled";
+
+  appointment_id:
+    | string
+    | null;
 
   expires_at: string;
 
@@ -83,6 +92,32 @@ export default function ClientAnamnesisCard({
   ] =
     useState<
       string | null
+    >(null);
+
+  const [
+    detailsOpen,
+    setDetailsOpen,
+  ] =
+    useState(false);
+
+  const [
+    detailsLoading,
+    setDetailsLoading,
+  ] =
+    useState(false);
+
+  const [
+    detailsError,
+    setDetailsError,
+  ] =
+    useState("");
+
+  const [
+    selectedForm,
+    setSelectedForm,
+  ] =
+    useState<
+      AnamnesisFormData | null
     >(null);
 
   const loadRequests =
@@ -319,12 +354,73 @@ export default function ClientAnamnesisCard({
     );
   }
 
+  async function openDetails(
+    requestId: string
+  ) {
+    setDetailsOpen(
+      true
+    );
+
+    setDetailsLoading(
+      true
+    );
+
+    setDetailsError("");
+
+    setSelectedForm(
+      null
+    );
+
+    try {
+      const response =
+        await fetch(
+          `/api/anamnese/requests?requestId=${encodeURIComponent(
+            requestId
+          )}&includeForm=true`,
+          {
+            cache:
+              "no-store",
+          }
+        );
+
+      const result =
+        await response.json();
+
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          result.error ||
+            "Não foi possível abrir a ficha."
+        );
+      }
+
+      setSelectedForm(
+        result.form
+      );
+    } catch (
+      viewError
+    ) {
+      setDetailsError(
+        viewError instanceof
+          Error
+          ? viewError.message
+          : "Não foi possível abrir a ficha."
+      );
+    } finally {
+      setDetailsLoading(
+        false
+      );
+    }
+  }
+
   const latestRequest =
     requests[0] ??
     null;
 
   return (
-    <section
+    <>
+      <section
       className="
         overflow-hidden
         rounded-2xl
@@ -758,6 +854,40 @@ export default function ClientAnamnesisCard({
                   </button>
                 </div>
               )}
+
+              {latestRequest.status ===
+                "completed" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void openDetails(
+                      latestRequest.id
+                    )
+                  }
+                  className="
+                    flex
+                    min-h-10
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    bg-[#111]
+                    px-4
+                    text-xs
+                    font-semibold
+                    text-white
+                  "
+                >
+                  <Eye
+                    className="
+                      h-4
+                      w-4
+                    "
+                  />
+
+                  Visualizar ficha
+                </button>
+              )}
             </div>
 
             {requests.length >
@@ -857,11 +987,51 @@ export default function ClientAnamnesisCard({
                             </p>
                           </div>
 
-                          <StatusBadge
-                            status={
-                              item.status
-                            }
-                          />
+                          <div
+                            className="
+                              flex
+                              items-center
+                              gap-2
+                            "
+                          >
+                            <StatusBadge
+                              status={
+                                item.status
+                              }
+                            />
+
+                            {item.status ===
+                              "completed" && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void openDetails(
+                                    item.id
+                                  )
+                                }
+                                className="
+                                  flex
+                                  h-8
+                                  w-8
+                                  items-center
+                                  justify-center
+                                  rounded-lg
+                                  border
+                                  border-black/10
+                                  bg-white
+                                  text-black/45
+                                "
+                                aria-label="Visualizar ficha"
+                              >
+                                <Eye
+                                  className="
+                                    h-3.5
+                                    w-3.5
+                                  "
+                                />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )
                     )}
@@ -872,6 +1042,33 @@ export default function ClientAnamnesisCard({
         )}
       </div>
     </section>
+
+      <AnamnesisDetailsModal
+        open={
+          detailsOpen
+        }
+        loading={
+          detailsLoading
+        }
+        error={
+          detailsError
+        }
+        form={
+          selectedForm
+        }
+        onClose={() => {
+          setDetailsOpen(
+            false
+          );
+
+          setSelectedForm(
+            null
+          );
+
+          setDetailsError("");
+        }}
+      />
+    </>
   );
 }
 
