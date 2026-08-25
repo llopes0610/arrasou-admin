@@ -211,12 +211,16 @@ export default async function ClientesPage() {
         <p
           className="
             mt-2
+            max-w-2xl
             text-sm
+            leading-6
             text-black/45
           "
         >
-          Consulte clientes e acompanhe
-          o histórico de atendimentos do Studio.
+          Consulte clientes, acompanhe
+          o histórico de atendimentos e
+          acesse as fichas de anamnese
+          de cada cliente.
         </p>
       </div>
 

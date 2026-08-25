@@ -15,6 +15,7 @@ import {
 } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import ClientAnamnesisCard from "@/components/clientes/ClientAnamnesisCard";
 
 type ClientDetailsPageProps = {
   params: Promise<{
@@ -350,6 +351,22 @@ export default async function ClientDetailsPage({
         />
       </div>
 
+      {/* ANAMNESE */}
+
+      <div className="mt-8">
+        <ClientAnamnesisCard
+          clientId={
+            client.id
+          }
+          clientName={
+            client.full_name
+          }
+          clientPhone={
+            client.phone
+          }
+        />
+      </div>
+
       <div
         className="
           mt-8
@@ -453,6 +470,7 @@ export default async function ClientDetailsPage({
                 {client.notes}
               </p>
             </div>
+            
           )}
         </aside>
 
@@ -515,6 +533,7 @@ export default async function ClientDetailsPage({
               Nenhum atendimento
               registrado.
             </div>
+            
           ) : (
             appointments.map(
               (appointment) => (
@@ -525,6 +544,8 @@ export default async function ClientDetailsPage({
                   appointment={
                     appointment
                   }
+                  
+                  
                 />
               )
             )
@@ -532,8 +553,11 @@ export default async function ClientDetailsPage({
         </section>
       </div>
     </div>
+    
   );
 }
+
+
 
 /* ============================================================
    HISTORY
@@ -851,13 +875,13 @@ function StatusBadge({
     canceled: {
       label: "Cancelado",
       className:
-        "bg-neutral-100 text-neutral-500",
+        "bg-red-100 text-red-700",
     },
 
     no_show: {
       label: "Faltou",
       className:
-        "bg-red-100 text-red-700",
+        "bg-amber-100 text-amber-800",
     },
   }[status];
 
