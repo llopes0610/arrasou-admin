@@ -361,6 +361,22 @@ export async function POST(
     }
 
     if (
+      !body.cpf?.trim() &&
+      !body.rg?.trim()
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Informe pelo menos um documento: CPF ou RG.",
+        },
+        {
+          status:
+            400,
+        }
+      );
+    }
+
+    if (
       !body.acceptedTerms
     ) {
       return NextResponse.json(

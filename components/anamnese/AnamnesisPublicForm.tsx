@@ -391,6 +391,17 @@ export default function AnamnesisPublicForm({
 
         return;
       }
+
+      if (
+        !cpf.trim() &&
+        !rg.trim()
+      ) {
+        setError(
+          "Informe pelo menos um documento: CPF ou RG."
+        );
+
+        return;
+      }
     }
 
     setStep(
@@ -1087,12 +1098,12 @@ function PersonalDataStep(
     <div>
       <StepTitle
         title="Seus dados"
-        description="Confira e complete suas informações."
+        description="Nome, telefone e pelo menos um documento são obrigatórios. Os demais campos são opcionais."
       />
 
       <div className="mt-6 space-y-4">
         <Field
-          label="Nome completo"
+          label="Nome completo *"
           value={
             props.fullName
           }
@@ -1131,6 +1142,16 @@ function PersonalDataStep(
           />
         </div>
 
+        <p
+          className="
+            -mt-2
+            text-[11px]
+            text-black/35
+          "
+        >
+          Informe pelo menos um documento: CPF ou RG.
+        </p>
+
         <label>
           <FieldLabel>
             Data de nascimento
@@ -1161,7 +1182,7 @@ function PersonalDataStep(
           "
         >
           <Field
-            label="Telefone / WhatsApp"
+            label="Telefone / WhatsApp *"
             value={
               props.phone
             }
@@ -1891,7 +1912,7 @@ const inputClass = `
   outline-none
   transition
   focus:border-[#C9A227]/60
-  focus:ring-2
+ focus:ring-2
   focus:ring-[#C9A227]/10
   sm:text-sm
 `;
