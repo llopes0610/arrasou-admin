@@ -60,6 +60,7 @@ export type CashMovement = {
 
 export type CashResponsibleUser = {
   id: string;
+
   full_name:
     | string
     | null;
@@ -68,6 +69,12 @@ export type CashResponsibleUser = {
 export default async function CashMovementsPage() {
   const supabase =
     await createClient();
+
+  /*
+   * ==========================================================
+   * USUÁRIO
+   * ==========================================================
+   */
 
   const {
     data: claimsData,
@@ -106,6 +113,39 @@ export default async function CashMovementsPage() {
     redirect("/agenda");
   }
 
+  /*
+   * ==========================================================
+   * PERÍODO DO MÊS ATUAL
+   * ==========================================================
+   *
+   * Exemplo:
+   *
+   * 01/09/2026
+   * até
+   * 01/10/2026
+   *
+   * Usamos:
+   *
+   * >= início do mês
+   * < início do próximo mês
+   *
+   * Assim evitamos problemas com quantidade
+   * de dias do mês.
+   * ==========================================================
+   */
+
+  const monthStart =
+    getMonthStart();
+
+  const nextMonthStart =
+    getNextMonthStart();
+
+  /*
+   * ==========================================================
+   * MOVIMENTAÇÕES + RESPONSÁVEIS
+   * ==========================================================
+   */
+
   const [
     movementsResult,
     usersResult,
@@ -138,6 +178,14 @@ export default async function CashMovementsPage() {
             full_name
           )
         `)
+        .gte(
+          "movement_date",
+          monthStart
+        )
+        .lt(
+          "movement_date",
+          nextMonthStart
+        )
         .order(
           "movement_date",
           {
@@ -174,6 +222,12 @@ export default async function CashMovementsPage() {
         ),
     ]);
 
+  /*
+   * ==========================================================
+   * ERROS
+   * ==========================================================
+   */
+
   if (
     movementsResult.error
   ) {
@@ -192,6 +246,12 @@ export default async function CashMovementsPage() {
     );
   }
 
+  /*
+   * ==========================================================
+   * DADOS
+   * ==========================================================
+   */
+
   const movements =
     (
       movementsResult.data ??
@@ -204,8 +264,16 @@ export default async function CashMovementsPage() {
       []
     ) as CashResponsibleUser[];
 
+  /*
+   * ==========================================================
+   * RENDER
+   * ==========================================================
+   */
+
   return (
     <div>
+      {/* HEADER */}
+
       <div>
         <p className="text-sm text-black/40">
           Gestão financeira
@@ -234,11 +302,13 @@ export default async function CashMovementsPage() {
             text-black/45
           "
         >
-          Registre despesas, retiradas
-          e outras movimentações da
-          conta do Studio.
+          Registre e acompanhe despesas,
+          retiradas e outras movimentações
+          do mês atual.
         </p>
       </div>
+
+      {/* DASHBOARD */}
 
       <div className="mt-8">
         <CashMovementsDashboard
@@ -255,4 +325,75 @@ export default async function CashMovementsPage() {
       </div>
     </div>
   );
+}
+
+/* ============================================================
+   PERÍODO
+============================================================ */
+
+/*
+ * Retorna o primeiro dia
+ * do mês atual.
+ *
+ * Exemplo:
+ *
+ * 2026-09-01
+ */
+
+function getMonthStart() {
+  const now =
+    new Date();
+
+  const year =
+    now.getFullYear();
+
+  const month =
+    String(
+      now.getMonth() +
+        1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  return `${year}-${month}-01`;
+}
+
+/*
+ * Retorna o primeiro dia
+ * do próximo mês.
+ *
+ * Exemplo:
+ *
+ * mês atual:
+ * 2026-09
+ *
+ * retorno:
+ * 2026-10-01
+ */
+
+function getNextMonthStart() {
+  const now =
+    new Date();
+
+  const nextMonth =
+    new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      1
+    );
+
+  const year =
+    nextMonth.getFullYear();
+
+  const month =
+    String(
+      nextMonth.getMonth() +
+        1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  return `${year}-${month}-01`;
 }
