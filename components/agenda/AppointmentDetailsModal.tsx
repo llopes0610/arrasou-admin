@@ -17,6 +17,8 @@ import {
   Loader2,
   Phone,
   RefreshCw,
+  Pencil,
+  Save,
   UserRound,
   UserX,
   WandSparkles,
@@ -61,6 +63,35 @@ type ProfessionalRelation = {
   display_name: string;
 };
 
+type Professional = {
+  id: string;
+  display_name: string;
+};
+
+type Service = {
+  id: string;
+  name: string;
+  price: number | string;
+  duration_minutes: number;
+  active: boolean;
+};
+
+type ProfessionalServiceQueryRow = {
+  professional_id: string;
+  service_id: string;
+  commission_percentage: number | string | null;
+  active: boolean;
+  services: Service | Service[] | null;
+};
+
+type ProfessionalService = {
+  professional_id: string;
+  service_id: string;
+  commission_percentage: number | string | null;
+  active: boolean;
+  service: Service;
+};
+
 type SupabaseRelation<T> =
   | T
   | T[]
@@ -82,6 +113,7 @@ function getRelation<T>(
 
 type AppointmentService = {
   id: string;
+  service_id: string;
   service_name: string;
   unit_price: number | string;
   commission_percentage: number | string;
@@ -115,6 +147,12 @@ export default function AppointmentDetailsModal({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showComplete, setShowComplete] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [professionalServices, setProfessionalServices] = useState<ProfessionalService[]>([]);
+  const [editProfessionalId, setEditProfessionalId] = useState("");
+  const [editServiceId, setEditServiceId] = useState("");
 
   const [
     showReschedule,
@@ -153,6 +191,7 @@ export default function AppointmentDetailsModal({
           ),
           appointment_services (
             id,
+            service_id,
             service_name,
             unit_price,
             commission_percentage
@@ -165,7 +204,12 @@ export default function AppointmentDetailsModal({
         throw appointmentError;
       }
 
-      setAppointment(data as unknown as AppointmentDetails);
+      const loaded = data as unknown as AppointmentDetails;
+      setAppointment(loaded);
+
+      const loadedProfessional = getRelation(loaded.professionals);
+      setEditProfessionalId(loadedProfessional?.id ?? "");
+      setEditServiceId(loaded.appointment_services?.[0]?.service_id ?? "");
     } catch (loadError) {
       console.error("Erro ao carregar atendimento:", loadError);
       setAppointment(null);
@@ -187,9 +231,158 @@ export default function AppointmentDetailsModal({
     setError("");
     setSuccess("");
     setShowComplete(false);
+    setShowEdit(false);
     setShowReschedule(false);
     setPaymentMethod("pix");
   }, [open]);
+
+
+  const loadEditOptions = useCallback(async () => {
+    try {
+      const [professionalsResult, servicesResult] = await Promise.all([
+        supabase
+          .from("professionals")
+          .select("id, display_name")
+          .eq("active", true)
+          .order("display_name"),
+        supabase
+          .from("professional_services")
+          .select(`
+            professional_id,
+            service_id,
+            commission_percentage,
+            active,
+            services (
+              id,
+              name,
+              price,
+              duration_minutes,
+              active
+            )
+          `)
+          .eq("active", true),
+      ]);
+
+      if (professionalsResult.error) throw professionalsResult.error;
+      if (servicesResult.error) throw servicesResult.error;
+
+      setProfessionals((professionalsResult.data ?? []) as Professional[]);
+
+      const rows = (servicesResult.data ?? []) as unknown as ProfessionalServiceQueryRow[];
+      const normalized = rows
+        .map((row): ProfessionalService | null => {
+          const service = Array.isArray(row.services) ? row.services[0] : row.services;
+          if (!service) return null;
+          return {
+            professional_id: row.professional_id,
+            service_id: row.service_id,
+            commission_percentage: row.commission_percentage,
+            active: row.active,
+            service,
+          };
+        })
+        .filter((row): row is ProfessionalService => row !== null);
+
+      setProfessionalServices(normalized);
+    } catch (loadError) {
+      console.error("Erro ao carregar opções de edição:", loadError);
+      setError("Não foi possível carregar profissionais e serviços para edição.");
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!showEdit) return;
+    void loadEditOptions();
+  }, [showEdit, loadEditOptions]);
+
+  const editAvailableServices = useMemo(() => {
+    const byId = new Map<string, Service>();
+    professionalServices
+      .filter(
+        (item) =>
+          item.professional_id === editProfessionalId &&
+          item.active &&
+          item.service.active
+      )
+      .forEach((item) => byId.set(item.service.id, item.service));
+    return Array.from(byId.values());
+  }, [professionalServices, editProfessionalId]);
+
+  function openEdit() {
+    if (!appointment) return;
+    const currentProfessional = getRelation(appointment.professionals);
+    setEditProfessionalId(currentProfessional?.id ?? "");
+    setEditServiceId(appointment.appointment_services?.[0]?.service_id ?? "");
+    setError("");
+    setSuccess("");
+    setShowEdit(true);
+  }
+
+  function cancelEdit() {
+    setShowEdit(false);
+    setError("");
+  }
+
+  async function saveAppointmentEdit() {
+    if (!appointment) return;
+
+    if (!editProfessionalId || !editServiceId) {
+      setError("Selecione a profissional e o serviço.");
+      return;
+    }
+
+    const serviceAllowed = professionalServices.some(
+      (item) =>
+        item.professional_id === editProfessionalId &&
+        item.service_id === editServiceId &&
+        item.active &&
+        item.service.active
+    );
+
+    if (!serviceAllowed) {
+      setError("O serviço selecionado não está disponível para esta profissional.");
+      return;
+    }
+
+    setEditLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const { error: rpcError } = await supabase.rpc("update_appointment_details", {
+        p_appointment_id: appointment.id,
+        p_professional_id: editProfessionalId,
+        p_service_id: editServiceId,
+      });
+
+      if (rpcError) {
+        const message = rpcError.message.toLowerCase();
+        if (
+          message.includes("appointments_no_professional_overlap") ||
+          message.includes("conflicting key value") ||
+          message.includes("exclusion constraint")
+        ) {
+          setError("Essa profissional já possui um atendimento nesse horário.");
+          return;
+        }
+        throw rpcError;
+      }
+
+      setShowEdit(false);
+      setSuccess("Profissional e serviço atualizados com sucesso.");
+      await loadAppointment();
+      await onUpdated();
+    } catch (saveError) {
+      console.error("Erro ao editar agendamento:", saveError);
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Não foi possível atualizar o agendamento."
+      );
+    } finally {
+      setEditLoading(false);
+    }
+  }
 
   async function updateStatus(status: AppointmentStatus) {
     if (!appointment) return;
@@ -357,9 +550,36 @@ export default function AppointmentDetailsModal({
               </InfoSection>
 
               <InfoSection title="Profissional" icon={UserRound}>
-                <p className="text-sm font-semibold text-[#111]">
-                  {professional?.display_name ?? "Profissional"}
-                </p>
+                {showEdit ? (
+                  <select
+                    value={editProfessionalId}
+                    onChange={(event) => {
+                      const nextProfessional = event.target.value;
+                      setEditProfessionalId(nextProfessional);
+                      const currentStillAllowed = professionalServices.some(
+                        (item) =>
+                          item.professional_id === nextProfessional &&
+                          item.service_id === editServiceId &&
+                          item.active &&
+                          item.service.active
+                      );
+                      if (!currentStillAllowed) setEditServiceId("");
+                    }}
+                    disabled={editLoading}
+                    className="h-12 w-full rounded-xl border border-black/10 bg-white px-4 text-sm text-[#111] outline-none focus:border-[#C9A227] disabled:opacity-60"
+                  >
+                    <option value="">Selecione a profissional</option>
+                    {professionals.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.display_name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-sm font-semibold text-[#111]">
+                    {professional?.display_name ?? "Profissional"}
+                  </p>
+                )}
               </InfoSection>
 
               {client && (
@@ -393,26 +613,47 @@ export default function AppointmentDetailsModal({
               </InfoSection>
 
               <InfoSection title="Serviço" icon={WandSparkles}>
-                <div className="space-y-3">
-                  {appointment.appointment_services.map((service) => (
-                    <div
-                      key={service.id}
-                      className="flex items-center justify-between gap-4 rounded-xl border border-black/10 p-4"
+                {showEdit ? (
+                  <div>
+                    <select
+                      value={editServiceId}
+                      onChange={(event) => setEditServiceId(event.target.value)}
+                      disabled={!editProfessionalId || editLoading}
+                      className="h-12 w-full rounded-xl border border-black/10 bg-white px-4 text-sm text-[#111] outline-none focus:border-[#C9A227] disabled:opacity-60"
                     >
-                      <div>
-                        <p className="text-sm font-semibold text-[#111]">
-                          {service.service_name}
-                        </p>
-                        <p className="mt-1 text-xs text-black/40">
-                          Comissão: {Number(service.commission_percentage)}%
-                        </p>
+                      <option value="">Selecione o serviço</option>
+                      {editAvailableServices.map((service) => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} • {formatCurrency(Number(service.price))}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-2 text-xs leading-5 text-black/40">
+                      Ao salvar, o valor, a comissão e a duração serão recalculados de acordo com o serviço selecionado.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {appointment.appointment_services.map((service) => (
+                      <div
+                        key={service.id}
+                        className="flex items-center justify-between gap-4 rounded-xl border border-black/10 p-4"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-[#111]">
+                            {service.service_name}
+                          </p>
+                          <p className="mt-1 text-xs text-black/40">
+                            Comissão: {Number(service.commission_percentage)}%
+                          </p>
+                        </div>
+                        <strong className="text-sm text-[#111]">
+                          {formatCurrency(Number(service.unit_price))}
+                        </strong>
                       </div>
-                      <strong className="text-sm text-[#111]">
-                        {formatCurrency(Number(service.unit_price))}
-                      </strong>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </InfoSection>
 
               <InfoSection
@@ -516,7 +757,41 @@ export default function AppointmentDetailsModal({
 
         {!loading && appointment && !showComplete && (
           <div className="shrink-0 border-t border-black/10 bg-white px-5 py-4 sm:px-6">
-            {appointment.status !== "completed" && (
+            {(appointment.status === "scheduled" || appointment.status === "confirmed") && (
+              showEdit ? (
+                <div className="mb-2 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    disabled={editLoading}
+                    className="flex h-11 items-center justify-center rounded-xl border border-black/10 text-sm font-semibold text-black/55 disabled:opacity-50"
+                  >
+                    Cancelar edição
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveAppointmentEdit()}
+                    disabled={editLoading || !editProfessionalId || !editServiceId}
+                    className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#111] text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {editLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Salvar alterações
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openEdit}
+                  disabled={actionLoading}
+                  className="mb-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-black/10 text-sm font-semibold text-black/65 transition-all hover:bg-black/[0.03] disabled:opacity-50"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Editar profissional e serviço
+                </button>
+              )
+            )}
+
+            {appointment.status !== "completed" && !showEdit && (
               <button
                 type="button"
                 onClick={() => setShowReschedule(true)}
@@ -528,7 +803,8 @@ export default function AppointmentDetailsModal({
               </button>
             )}
 
-            {appointment.status !== "completed" &&
+            {!showEdit &&
+              appointment.status !== "completed" &&
               appointment.status !== "canceled" && (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {appointment.status === "scheduled" && (
@@ -565,7 +841,7 @@ export default function AppointmentDetailsModal({
                 </div>
               )}
 
-            {appointment.status === "canceled" && (
+            {!showEdit && appointment.status === "canceled" && (
               <button
                 type="button"
                 onClick={() => void updateStatus("scheduled")}
