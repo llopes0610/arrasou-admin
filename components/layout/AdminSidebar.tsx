@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -5,12 +6,12 @@ import { usePathname } from "next/navigation";
 
 import {
   CalendarDays,
-  ChartNoAxesCombined,
   LayoutDashboard,
   Settings,
   UsersRound,
   WalletCards,
   WandSparkles,
+  HandCoins,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -26,7 +27,7 @@ type AdminSidebarProps = {
   profile: Profile;
 };
 
-const navigation = [
+const adminNavigation = [
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -54,55 +55,58 @@ const navigation = [
   },
 ];
 
+const professionalNavigation = [
+  {
+    label: "Agenda",
+    href: "/agenda",
+    icon: CalendarDays,
+  },
+  {
+    label: "Minha Produção",
+    href: "/minha-producao",
+    icon: HandCoins,
+  },
+];
+
 export default function AdminSidebar({
   profile,
 }: AdminSidebarProps) {
   const pathname = usePathname();
 
+  const isAdmin = profile.role === "admin";
+
+  const navigation = isAdmin
+    ? adminNavigation
+    : professionalNavigation;
+
   return (
     <aside
       className="
-        fixed
-        bottom-0
-        left-0
-        top-0
-        z-40
-        hidden
-        w-[260px]
-        border-r
-        border-white/10
-        bg-[#080808]
-        text-white
-
-        lg:flex
-        lg:flex-col
+        fixed bottom-0 left-0 top-0 z-40
+        hidden w-[260px]
+        border-r border-white/10
+        bg-[#080808] text-white
+        lg:flex lg:flex-col
       "
     >
       {/* LOGO */}
 
       <div className="border-b border-white/10 px-6 py-6">
         <Link
-          href="/dashboard"
+          href={isAdmin ? "/dashboard" : "/agenda"}
           className="flex items-center gap-3"
         >
           <div
             className="
-              flex
-              h-10
-              w-10
-              rotate-45
-              items-center
-              justify-center
-              border
-              border-[#C9A227]/60
+              flex h-10 w-10 rotate-45
+              items-center justify-center
+              border border-[#C9A227]/60
             "
           >
             <span
               className="
-                -rotate-45
-                font-serif
-                italic
-                text-[#C9A227]
+                -rotate-45 font-serif
+                italic text-[#C9A227]
               "
             >
               AS
@@ -116,10 +120,8 @@ export default function AdminSidebar({
 
             <p
               className="
-                text-[8px]
-                uppercase
-                tracking-[0.28em]
-                text-[#C9A227]
+                text-[8px] uppercase
+                tracking-[0.28em] text-[#C9A227]
               "
             >
               Administração
@@ -136,9 +138,7 @@ export default function AdminSidebar({
 
           const active =
             pathname === item.href ||
-            pathname.startsWith(
-              `${item.href}/`
-            );
+            pathname.startsWith(`${item.href}/`);
 
           return (
             <Link
@@ -146,14 +146,9 @@ export default function AdminSidebar({
               href={item.href}
               className={cn(
                 `
-                  flex
-                  items-center
-                  gap-3
-                  rounded-xl
-                  px-4
-                  py-3
-                  text-sm
-                  transition-all
+                  flex items-center gap-3
+                  rounded-xl px-4 py-3
+                  text-sm transition-all
                 `,
                 active
                   ? "bg-[#C9A227] font-semibold text-black"
@@ -167,15 +162,13 @@ export default function AdminSidebar({
           );
         })}
 
-        {profile.role === "admin" && (
+        {isAdmin && (
           <>
             <div className="px-4 pb-2 pt-6">
               <p
                 className="
-                  text-[9px]
-                  font-semibold
-                  uppercase
-                  tracking-[0.24em]
+                  text-[9px] font-semibold
+                  uppercase tracking-[0.24em]
                   text-white/20
                 "
               >
@@ -187,24 +180,16 @@ export default function AdminSidebar({
               href="/configuracoes"
               className={cn(
                 `
-                  flex
-                  items-center
-                  gap-3
-                  rounded-xl
-                  px-4
-                  py-3
-                  text-sm
-                  transition-all
+                  flex items-center gap-3
+                  rounded-xl px-4 py-3
+                  text-sm transition-all
                 `,
-                pathname.startsWith(
-                  "/configuracoes"
-                )
+                pathname.startsWith("/configuracoes")
                   ? "bg-[#C9A227] font-semibold text-black"
                   : "text-white/50 hover:bg-white/[0.05] hover:text-white"
               )}
             >
               <Settings className="h-4 w-4" />
-
               Configurações
             </Link>
           </>
@@ -217,19 +202,14 @@ export default function AdminSidebar({
         <div className="flex items-center gap-3">
           <div
             className="
-              flex
-              h-10
-              w-10
-              items-center
-              justify-center
-              rounded-full
-              bg-[#C9A227]/10
-              text-sm
-              font-semibold
+              flex h-10 w-10
+              items-center justify-center
+              rounded-full bg-[#C9A227]/10
+              text-sm font-semibold
               text-[#C9A227]
             "
           >
-            {profile.full_name
+            {(profile.full_name ?? "U")
               .charAt(0)
               .toUpperCase()}
           </div>
@@ -240,7 +220,7 @@ export default function AdminSidebar({
             </p>
 
             <p className="mt-1 text-[10px] uppercase tracking-wider text-white/30">
-              {profile.role === "admin"
+              {isAdmin
                 ? "Administrador"
                 : "Profissional"}
             </p>

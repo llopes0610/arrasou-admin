@@ -127,4 +127,46 @@ export async function requireAdmin() {
   }
 
   return profile;
+
+}
+
+
+/*
+ * ============================================================
+ * EXIGIR ACESSO DE PROFISSIONAL
+ * ============================================================
+ */
+
+export async function requireProfessionalAccess() {
+  const profile = await getCurrentProfile();
+
+  if (profile.role !== "professional") {
+    redirect("/dashboard");
+  }
+
+  const supabase = await createClient();
+
+  const { data: professional, error } = await supabase
+    .from("professionals")
+    .select("id, display_name, profile_id, active")
+    .eq("profile_id", profile.id)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      "Não foi possível verificar o cadastro profissional."
+    );
+  }
+
+  if (!professional) {
+    throw new Error(
+      "Nenhum cadastro profissional ativo está vinculado a esta conta."
+    );
+  }
+
+  return {
+    profile,
+    professional,
+  };
 }
