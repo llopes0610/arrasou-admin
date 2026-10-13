@@ -41,6 +41,7 @@ type AgendaCalendarProps = {
   currentUserRole:
     | "admin"
     | "professional";
+  isReceptionist: boolean;
 };
 
 type AppointmentStatus =
@@ -157,6 +158,7 @@ type CalendarEvent = {
 
 export default function AgendaCalendar({
   currentUserRole,
+  isReceptionist,
 }: AgendaCalendarProps) {
   const supabase =
     useMemo(
@@ -434,8 +436,8 @@ export default function AgendaCalendar({
                     appointment.id,
 
                   title:
-                    currentUserRole ===
-                    "admin"
+                    (currentUserRole ===
+                    "admin" || isReceptionist)
                       ? `${clientName} • ${professionalName}`
                       : clientName,
 
@@ -493,6 +495,7 @@ export default function AgendaCalendar({
       },
       [
         currentUserRole,
+        isReceptionist,
         supabase,
       ]
     );
@@ -1224,8 +1227,8 @@ export default function AgendaCalendar({
                           props.serviceName
                         }
 
-                        {currentUserRole ===
-                          "admin" &&
+                        {(currentUserRole ===
+                          "admin" || isReceptionist) &&
                           ` • ${props.professionalName}`}
                       </p>
 
@@ -1308,8 +1311,8 @@ export default function AgendaCalendar({
                       }
                     </p>
 
-                    {currentUserRole ===
-                      "admin" && (
+                    {(currentUserRole ===
+                      "admin" || isReceptionist) && (
                       <p
                         className="
                           truncate
@@ -1378,6 +1381,7 @@ export default function AgendaCalendar({
         currentUserRole={
           currentUserRole
         }
+        isReceptionist={isReceptionist}
 
         onClose={
           handleCloseNewAppointment
@@ -1397,6 +1401,7 @@ export default function AgendaCalendar({
       ====================================================== */}
 
       <AppointmentDetailsModal
+        isReceptionist={isReceptionist}
         open={
           appointmentDetailsOpen
         }

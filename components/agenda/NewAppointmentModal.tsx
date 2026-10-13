@@ -42,6 +42,8 @@ type NewAppointmentModalProps = {
   | "admin"
   | "professional";
 
+  isReceptionist: boolean;
+
   onClose: () => void;
 
   onCreated: () =>
@@ -131,9 +133,12 @@ export default function NewAppointmentModal({
   open,
   selectedDate,
   currentUserRole,
+  isReceptionist,
   onClose,
   onCreated,
 }: NewAppointmentModalProps) {
+  const canChooseProfessional = currentUserRole === "admin" || isReceptionist;
+
   const supabase =
     useMemo(
       () =>
@@ -373,29 +378,26 @@ export default function NewAppointmentModal({
             /*
              * SERVIÇOS POR PROFISSIONAL
              */
-            supabase
-              .from(
-                "professional_services"
-              )
-              .select(`
-                id,
-                professional_id,
-                service_id,
-                commission_percentage,
-                active,
+            isReceptionist
+              ? supabase.rpc("reception_agenda_services")
+              : supabase
+                  .from("professional_services")
+                  .select(`
+                    id,
+                    professional_id,
+                    service_id,
+                    commission_percentage,
+                    active,
 
-                services (
-                  id,
-                  name,
-                  price,
-                  duration_minutes,
-                  active
-                )
-              `)
-              .eq(
-                "active",
-                true
-              ),
+                    services (
+                      id,
+                      name,
+                      price,
+                      duration_minutes,
+                      active
+                    )
+                  `)
+                  .eq("active", true),
 
             /*
              * CLIENTES
@@ -442,11 +444,13 @@ export default function NewAppointmentModal({
          * ====================================================
          */
 
-        const professionalRows =
-          (
-            professionalsResult.data ??
-            []
-          ) as unknown as Professional[];
+        const professionalRows = (
+          (professionalsResult.data ?? []) as unknown as Professional[]
+        ).filter(
+          (professional) =>
+            !isReceptionist ||
+            professional.profile_id !== "e4a48918-8e8b-41a9-8dbc-4c28c7c3003d"
+        );
 
         /*
          * ====================================================
@@ -539,6 +543,12 @@ export default function NewAppointmentModal({
           normalizedServiceRows
         );
 
+        if (isReceptionist && normalizedServiceRows.length === 0) {
+          setError(
+            "Nenhum serviço disponível para a recepção. Verifique se a função reception_agenda_services foi instalada no Supabase."
+          );
+        }
+
         setClients(
           clientRows
         );
@@ -549,8 +559,8 @@ export default function NewAppointmentModal({
          * somente o próprio registro.
          */
         if (
-          currentUserRole ===
-          "professional"
+          currentUserRole === "professional" &&
+          !isReceptionist
         ) {
           if (
             professionalRows.length ===
@@ -599,6 +609,7 @@ export default function NewAppointmentModal({
   }, [
     open,
     currentUserRole,
+    isReceptionist,
     supabase,
   ]);
 
@@ -793,8 +804,7 @@ export default function NewAppointmentModal({
     );
 
     if (
-      currentUserRole ===
-      "admin"
+      canChooseProfessional
     ) {
       setSelectedProfessional(
         ""
@@ -916,7 +926,9 @@ export default function NewAppointmentModal({
         rpcError,
       } =
         await supabase.rpc(
-          "create_appointment",
+          isReceptionist
+            ? "reception_create_appointment"
+            : "create_appointment",
           {
             p_client_id:
               createNewClient
@@ -1237,8 +1249,7 @@ export default function NewAppointmentModal({
                         )
                       }
                       disabled={
-                        currentUserRole ===
-                        "professional" ||
+                        !canChooseProfessional ||
                         loading
                       }
                       required

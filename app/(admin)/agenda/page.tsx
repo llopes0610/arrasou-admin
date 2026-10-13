@@ -21,6 +21,7 @@ export default async function AgendaPage() {
       id,
       full_name,
       role,
+      access_scope,
       active
     `)
     .eq("id", userId)
@@ -66,6 +67,12 @@ export default async function AgendaPage() {
         <AgendaCalendar
           currentUserRole={
             profile?.role ?? "professional"
+          }
+          isReceptionist={
+            profile?.id === "e4a48918-8e8b-41a9-8dbc-4c28c7c3003d" &&
+            profile?.role === "professional" &&
+            profile?.access_scope === "agenda_only" &&
+            profile?.active === true
           }
         />
       </div>

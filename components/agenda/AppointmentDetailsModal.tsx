@@ -48,6 +48,7 @@ type PaymentMethod =
 type AppointmentDetailsModalProps = {
   open: boolean;
   appointmentId: string | null;
+  isReceptionist: boolean;
   onClose: () => void;
   onUpdated: () => void | Promise<void>;
 };
@@ -66,6 +67,7 @@ type ProfessionalRelation = {
 type Professional = {
   id: string;
   display_name: string;
+  profile_id?: string | null;
 };
 
 type Service = {
@@ -116,7 +118,7 @@ type AppointmentService = {
   service_id: string;
   service_name: string;
   unit_price: number | string;
-  commission_percentage: number | string;
+  commission_percentage?: number | string;
 };
 
 type AppointmentDetails = {
@@ -135,6 +137,7 @@ type AppointmentDetails = {
 export default function AppointmentDetailsModal({
   open,
   appointmentId,
+  isReceptionist,
   onClose,
   onUpdated,
 }: AppointmentDetailsModalProps) {
@@ -193,8 +196,8 @@ export default function AppointmentDetailsModal({
             id,
             service_id,
             service_name,
-            unit_price,
-            commission_percentage
+            unit_price
+            ${isReceptionist ? "" : ", commission_percentage"}
           )
         `)
         .eq("id", appointmentId)
@@ -217,7 +220,7 @@ export default function AppointmentDetailsModal({
     } finally {
       setLoading(false);
     }
-  }, [appointmentId, supabase]);
+  }, [appointmentId, isReceptionist, supabase]);
 
   useEffect(() => {
     if (!open) return;
@@ -242,31 +245,38 @@ export default function AppointmentDetailsModal({
       const [professionalsResult, servicesResult] = await Promise.all([
         supabase
           .from("professionals")
-          .select("id, display_name")
+          .select("id, display_name, profile_id")
           .eq("active", true)
           .order("display_name"),
-        supabase
-          .from("professional_services")
-          .select(`
-            professional_id,
-            service_id,
-            commission_percentage,
-            active,
-            services (
-              id,
-              name,
-              price,
-              duration_minutes,
-              active
-            )
-          `)
-          .eq("active", true),
+        isReceptionist
+          ? supabase.rpc("reception_agenda_services")
+          : supabase
+              .from("professional_services")
+              .select(`
+                professional_id,
+                service_id,
+                commission_percentage,
+                active,
+                services (
+                  id,
+                  name,
+                  price,
+                  duration_minutes,
+                  active
+                )
+              `)
+              .eq("active", true),
       ]);
 
       if (professionalsResult.error) throw professionalsResult.error;
       if (servicesResult.error) throw servicesResult.error;
 
-      setProfessionals((professionalsResult.data ?? []) as Professional[]);
+      setProfessionals(
+        ((professionalsResult.data ?? []) as Professional[]).filter(
+          (item) => !isReceptionist ||
+            item.profile_id !== "e4a48918-8e8b-41a9-8dbc-4c28c7c3003d"
+        )
+      );
 
       const rows = (servicesResult.data ?? []) as unknown as ProfessionalServiceQueryRow[];
       const normalized = rows
@@ -288,7 +298,7 @@ export default function AppointmentDetailsModal({
       console.error("Erro ao carregar opções de edição:", loadError);
       setError("Não foi possível carregar profissionais e serviços para edição.");
     }
-  }, [supabase]);
+  }, [supabase, isReceptionist]);
 
   useEffect(() => {
     if (!showEdit) return;
@@ -643,9 +653,11 @@ export default function AppointmentDetailsModal({
                           <p className="text-sm font-semibold text-[#111]">
                             {service.service_name}
                           </p>
-                          <p className="mt-1 text-xs text-black/40">
-                            Comissão: {Number(service.commission_percentage)}%
-                          </p>
+                          {!isReceptionist && (
+                            <p className="mt-1 text-xs text-black/40">
+                              Comissão: {Number(service.commission_percentage)}%
+                            </p>
+                          )}
                         </div>
                         <strong className="text-sm text-[#111]">
                           {formatCurrency(Number(service.unit_price))}
@@ -656,27 +668,18 @@ export default function AppointmentDetailsModal({
                 )}
               </InfoSection>
 
-              <InfoSection
-                title={
-                  appointment.status === "completed"
-                    ? "Financeiro"
-                    : "Valores previstos"
-                }
-                icon={CircleDollarSign}
-              >
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <InfoCard label="Total" value={formatCurrency(grossTotal)} />
-                  <InfoCard
-                    label="Profissional"
-                    value={formatCurrency(professionalTotal)}
-                  />
-                  <InfoCard
-                    label="Studio"
-                    value={formatCurrency(studioTotal)}
-                    highlight
-                  />
-                </div>
-              </InfoSection>
+              {!isReceptionist && (
+                <InfoSection
+                  title={appointment.status === "completed" ? "Financeiro" : "Valores previstos"}
+                  icon={CircleDollarSign}
+                >
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <InfoCard label="Total" value={formatCurrency(grossTotal)} />
+                    <InfoCard label="Profissional" value={formatCurrency(professionalTotal)} />
+                    <InfoCard label="Studio" value={formatCurrency(studioTotal)} highlight />
+                  </div>
+                </InfoSection>
+              )}
 
               {appointment.notes && (
                 <InfoSection title="Observações" icon={Clock3}>
@@ -816,13 +819,15 @@ export default function AppointmentDetailsModal({
                     />
                   )}
 
-                  <ActionButton
-                    label="Concluir"
-                    icon={Check}
-                    gold
-                    onClick={() => setShowComplete(true)}
-                    disabled={actionLoading}
-                  />
+                  {!isReceptionist && (
+                    <ActionButton
+                      label="Concluir"
+                      icon={Check}
+                      gold
+                      onClick={() => setShowComplete(true)}
+                      disabled={actionLoading}
+                    />
+                  )}
 
                   <ActionButton
                     label="Marcar falta"
