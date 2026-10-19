@@ -2100,6 +2100,33 @@ export default function AgendaCalendar({
 
               slotDuration="00:30:00"
 
+              /*
+               * FullCalendar v7 gera classes minificadas,
+               * então a altura do slot vem por opção,
+               * e não pelo CSS .fc-timegrid-slot.
+               */
+              slotMinHeight={
+                isMobile
+                  ? 31
+                  : 46
+              }
+
+              /*
+               * Atendimentos simultâneos ficam lado a lado,
+               * sem um card cobrir o outro.
+               */
+              slotEventOverlap={
+                false
+              }
+
+              /*
+               * Até 30 min (46px) o card não comporta
+               * 4 linhas: usa o layout compacto.
+               */
+              eventShortHeight={
+                50
+              }
+
 
 
               /*
@@ -2356,7 +2383,11 @@ export default function AgendaCalendar({
 
                       className="
 
+                        h-full
+
                         min-w-0
+
+                        overflow-hidden
 
                         px-2
 
@@ -2541,11 +2572,63 @@ export default function AgendaCalendar({
 
 
 
+                /*
+                 * Atendimentos curtos (ex.: 20 min):
+                 * horário e cliente em uma linha só.
+                 */
+                if (
+                  info.isShort
+                ) {
+                  return (
+                    <div
+                      className="
+                        flex
+                        h-full
+                        min-w-0
+                        items-center
+                        gap-1
+                        overflow-hidden
+                        px-1
+                      "
+                    >
+                      <span
+                        className="
+                          shrink-0
+                          text-[11px]
+                          font-bold
+                          text-[#111111]
+                        "
+                      >
+                        {
+                          info.timeText
+                        }
+                      </span>
+
+                      <span
+                        className="
+                          truncate
+                          text-[12px]
+                          font-bold
+                          text-[#111111]
+                        "
+                      >
+                        {
+                          props.clientName
+                        }
+                      </span>
+                    </div>
+                  );
+                }
+
                 return (
 
                   <div
 
                     className="
+
+                      h-full
+
+                      min-w-0
 
                       overflow-hidden
 
@@ -2562,6 +2645,8 @@ export default function AgendaCalendar({
                       className="
 
                         truncate
+
+                        leading-tight
 
                         text-[11px]
 
@@ -2588,6 +2673,8 @@ export default function AgendaCalendar({
 
                         truncate
 
+                        leading-tight
+
                         text-[12px]
 
                         font-bold
@@ -2612,6 +2699,8 @@ export default function AgendaCalendar({
                       className="
 
                         truncate
+
+                        leading-tight
 
                         text-[11px]
 
@@ -2641,6 +2730,8 @@ export default function AgendaCalendar({
                         className="
 
                           truncate
+
+                        leading-tight
 
                           text-[10px]
 
@@ -2675,6 +2766,8 @@ export default function AgendaCalendar({
 
                           truncate
 
+                        leading-tight
+
                           text-[10px]
 
                           font-bold
@@ -2707,6 +2800,8 @@ export default function AgendaCalendar({
                           mt-0.5
 
                           truncate
+
+                        leading-tight
 
                           text-[10px]
 
