@@ -288,7 +288,7 @@ export default function AppointmentAnamnesisCard({
 
     const message =
       `Olá, ${clientName}! 😊\n\n` +
-      `Aqui é do Studio Arrasou Sobrancelhas.\n\n` +
+      `Aqui é a Thays do Studio Arrasou Sobrancelhas.\n\n` +
       `Antes do seu atendimento, precisamos que você preencha sua ficha de anamnese pelo link abaixo:\n\n` +
       `${formUrl}\n\n` +
       `O preenchimento é rápido e as informações são importantes para a segurança do seu procedimento. ✨`;
