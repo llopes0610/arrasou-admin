@@ -407,6 +407,24 @@ export async function POST(
       );
     }
 
+    if (
+      body.birthDate &&
+      !isValidBirthDate(
+        body.birthDate
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Data de nascimento inválida. Confira o dia, o mês e o ano.",
+        },
+        {
+          status:
+            400,
+        }
+      );
+    }
+
     const supabase =
       createAdminClient();
 
@@ -460,6 +478,22 @@ export async function POST(
      * STATUS
      * ========================================================
      */
+
+    /*
+     * Reenvio (toque duplo, internet instável):
+     * a ficha já foi recebida, então não é erro.
+     */
+    if (
+      anamnesisRequest.status ===
+      "completed"
+    ) {
+      return NextResponse.json({
+        success:
+          true,
+        alreadySubmitted:
+          true,
+      });
+    }
 
     if (
       anamnesisRequest.status !==
@@ -722,6 +756,22 @@ export async function POST(
             userAgent,
         });
 
+    /*
+     * UNIQUE (request_id): dois envios simultâneos.
+     * O primeiro gravou; este não deve mostrar erro.
+     */
+    if (
+      insertError?.code ===
+      "23505"
+    ) {
+      return NextResponse.json({
+        success:
+          true,
+        alreadySubmitted:
+          true,
+      });
+    }
+
     if (
       insertError
     ) {
@@ -801,6 +851,36 @@ export async function POST(
       }
     );
   }
+}
+
+/*
+ * Aceita somente AAAA-MM-DD real, entre 1900 e hoje.
+ */
+function isValidBirthDate(
+  value: string
+) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      value
+    )
+  ) {
+    return false;
+  }
+
+  const date =
+    new Date(
+      `${value}T12:00:00Z`
+    );
+
+  return (
+    !Number.isNaN(
+      date.getTime()
+    ) &&
+    date.toISOString().slice(0, 10) ===
+      value &&
+    date.getUTCFullYear() >= 1900 &&
+    date.getTime() <= Date.now()
+  );
 }
 
 function cleanNullable(

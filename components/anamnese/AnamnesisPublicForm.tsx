@@ -2,10 +2,14 @@
 
 import {
   type FormEvent,
+  type ReactNode,
+  useEffect,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import {
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -44,595 +48,328 @@ type HealthAnswers = {
   continuousMedication: boolean;
 };
 
-const initialHealth:
-  HealthAnswers = {
-    smoker:
-      false,
+type FormState = {
+  fullName: string;
+  cpf: string;
+  rg: string;
+  /* DD/MM/AAAA na tela; convertido para AAAA-MM-DD no envio. */
+  birthDate: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  cep: string;
+  howDidYouFindUs: string;
+  health: HealthAnswers;
+  /* Confirmação explícita de que nenhuma condição se aplica. */
+  noHealthConditions: boolean;
+  otherHealthProblem: string;
+  procedureType: string;
+  imageAuthorized: boolean | null;
+  acceptedTerms: boolean;
+  clientSignature: string;
+};
 
-    pregnant:
-      false,
+type Draft = {
+  savedAt: number;
+  step: number;
+  form: FormState;
+};
 
-    breastfeeding:
-      false,
+const TOTAL_STEPS = 4;
 
-    hypertension:
-      false,
-
-    diabetes:
-      false,
-
-    allergies:
-      false,
-
-    herpes:
-      false,
-
-    heartDisease:
-      false,
-
-    anemia:
-      false,
-
-    glaucoma:
-      false,
-
-    hepatitis:
-      false,
-
-    autoimmuneDisease:
-      false,
-
-    roaccutane:
-      false,
-
-    epilepsy:
-      false,
-
-    hiv:
-      false,
-
-    skinProblems:
-      false,
-
-    keloids:
-      false,
-
-    oncologicalHistory:
-      false,
-
-    continuousMedication:
-      false,
-  };
-
-const healthQuestions: {
-  key:
-    keyof HealthAnswers;
-
-  label:
-    string;
-}[] = [
-  {
-    key:
-      "smoker",
-    label:
-      "Fuma?",
-  },
-  {
-    key:
-      "pregnant",
-    label:
-      "Gestante?",
-  },
-  {
-    key:
-      "breastfeeding",
-    label:
-      "Está amamentando?",
-  },
-  {
-    key:
-      "hypertension",
-    label:
-      "Possui hipertensão?",
-  },
-  {
-    key:
-      "diabetes",
-    label:
-      "Possui diabetes?",
-  },
-  {
-    key:
-      "allergies",
-    label:
-      "Possui alergias?",
-  },
-  {
-    key:
-      "herpes",
-    label:
-      "Possui herpes?",
-  },
-  {
-    key:
-      "heartDisease",
-    label:
-      "Possui cardiopatia?",
-  },
-  {
-    key:
-      "anemia",
-    label:
-      "Possui anemia?",
-  },
-  {
-    key:
-      "glaucoma",
-    label:
-      "Possui glaucoma?",
-  },
-  {
-    key:
-      "hepatitis",
-    label:
-      "Possui ou já teve hepatite?",
-  },
-  {
-    key:
-      "autoimmuneDisease",
-    label:
-      "Possui doença autoimune?",
-  },
-  {
-    key:
-      "roaccutane",
-    label:
-      "Faz uso de Roacutan?",
-  },
-  {
-    key:
-      "epilepsy",
-    label:
-      "Possui epilepsia?",
-  },
-  {
-    key:
-      "hiv",
-    label:
-      "Portador(a) de HIV?",
-  },
-  {
-    key:
-      "skinProblems",
-    label:
-      "Possui problemas de pele?",
-  },
-  {
-    key:
-      "keloids",
-    label:
-      "Possui tendência a queloides?",
-  },
-  {
-    key:
-      "oncologicalHistory",
-    label:
-      "Possui antecedentes oncológicos?",
-  },
-  {
-    key:
-      "continuousMedication",
-    label:
-      "Faz uso de medicamentos contínuos?",
-  },
+const STEP_NAMES = [
+  "Seus dados",
+  "Saúde",
+  "Procedimento",
+  "Termo",
 ];
 
-export default function AnamnesisPublicForm({
+/* Rascunho salvo no próprio celular, descartado após 7 dias. */
+const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+const initialHealth: HealthAnswers = {
+  smoker: false,
+  pregnant: false,
+  breastfeeding: false,
+  hypertension: false,
+  diabetes: false,
+  allergies: false,
+  herpes: false,
+  heartDisease: false,
+  anemia: false,
+  glaucoma: false,
+  hepatitis: false,
+  autoimmuneDisease: false,
+  roaccutane: false,
+  epilepsy: false,
+  hiv: false,
+  skinProblems: false,
+  keloids: false,
+  oncologicalHistory: false,
+  continuousMedication: false,
+};
+
+const healthQuestions: {
+  key: keyof HealthAnswers;
+  label: string;
+}[] = [
+  { key: "smoker", label: "Fumante" },
+  { key: "pregnant", label: "Gestante" },
+  { key: "breastfeeding", label: "Amamentando" },
+  { key: "hypertension", label: "Hipertensão" },
+  { key: "diabetes", label: "Diabetes" },
+  { key: "allergies", label: "Alergias" },
+  { key: "herpes", label: "Herpes" },
+  { key: "heartDisease", label: "Cardiopatia" },
+  { key: "anemia", label: "Anemia" },
+  { key: "glaucoma", label: "Glaucoma" },
+  { key: "hepatitis", label: "Hepatite (atual ou passada)" },
+  { key: "autoimmuneDisease", label: "Doença autoimune" },
+  { key: "roaccutane", label: "Uso de Roacutan" },
+  { key: "epilepsy", label: "Epilepsia" },
+  { key: "hiv", label: "Portador(a) de HIV" },
+  { key: "skinProblems", label: "Problemas de pele" },
+  { key: "keloids", label: "Tendência a queloides" },
+  { key: "oncologicalHistory", label: "Antecedentes oncológicos" },
+  { key: "continuousMedication", label: "Medicamentos de uso contínuo" },
+];
+
+/* Valores mantidos: o painel (AnamnesisDetailsModal) traduz estes códigos. */
+const procedures = [
+  { value: "sobrancelhas", label: "Sobrancelhas" },
+  { value: "labios", label: "Lábios" },
+  { value: "olhos", label: "Olhos" },
+  { value: "cilios", label: "Cílios" },
+];
+
+/*
+ * ============================================================
+ * COMPONENTE
+ *
+ * O formulário só é montado no navegador, para poder
+ * restaurar o rascunho salvo sem divergência de hidratação.
+ * ============================================================
+ */
+
+const noopSubscribe = () => () => {};
+
+export default function AnamnesisPublicForm(
+  props: AnamnesisPublicFormProps
+) {
+  const isClient = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false
+  );
+
+  if (!isClient) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-[#F7F6F2]">
+        <Loader2 className="h-6 w-6 animate-spin text-[#C9A227]" />
+      </main>
+    );
+  }
+
+  return <AnamnesisForm {...props} />;
+}
+
+function AnamnesisForm({
   token,
   initialClient,
 }: AnamnesisPublicFormProps) {
-  const [
-    step,
-    setStep,
-  ] =
-    useState(1);
+  const draftKey = `arrasou-anamnese-${token}`;
 
-  const [
-    fullName,
-    setFullName,
-  ] =
-    useState(
-      initialClient.fullName
-    );
+  const [initialDraft] = useState(() => readDraft(draftKey));
 
-  const [
-    cpf,
-    setCpf,
-  ] =
-    useState("");
+  const [step, setStep] = useState(initialDraft?.step ?? 1);
 
-  const [
-    rg,
-    setRg,
-  ] =
-    useState("");
+  const [form, setForm] = useState<FormState>(
+    () =>
+      initialDraft?.form ?? {
+        fullName: initialClient.fullName,
+        cpf: "",
+        rg: "",
+        birthDate: "",
+        phone: maskPhone(initialClient.phone),
+        email: "",
+        address: "",
+        city: "",
+        cep: "",
+        howDidYouFindUs: "",
+        health: initialHealth,
+        noHealthConditions: false,
+        otherHealthProblem: "",
+        procedureType: "",
+        imageAuthorized: null,
+        acceptedTerms: false,
+        clientSignature: "",
+      }
+  );
 
-  const [
-    birthDate,
-    setBirthDate,
-  ] =
-    useState("");
-
-  const [
-    phone,
-    setPhone,
-  ] =
-    useState(
-      initialClient.phone
-    );
-
-  const [
-    email,
-    setEmail,
-  ] =
-    useState("");
-
-  const [
-    address,
-    setAddress,
-  ] =
-    useState("");
-
-  const [
-    city,
-    setCity,
-  ] =
-    useState("");
-
-  const [
-    cep,
-    setCep,
-  ] =
-    useState("");
-
-  const [
-    howDidYouFindUs,
-    setHowDidYouFindUs,
-  ] =
-    useState("");
-
-  const [
-    health,
-    setHealth,
-  ] =
-    useState(
-      initialHealth
-    );
-
-  const [
-    otherHealthProblem,
-    setOtherHealthProblem,
-  ] =
-    useState("");
-
-  const [
-    procedureType,
-    setProcedureType,
-  ] =
-    useState("");
-
-  const [
-    imageAuthorized,
-    setImageAuthorized,
-  ] =
-    useState<
-      boolean | null
-    >(null);
-
-  const [
-    acceptedTerms,
-    setAcceptedTerms,
-  ] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState<
+    null | "sent" | "already"
+  >(null);
 
   /*
-   * MVP:
-   * assinatura por confirmação nominal.
-   *
-   * Na próxima evolução podemos trocar
-   * pelo canvas desenhado.
+   * Salva o rascunho a cada alteração: a cliente pode sair
+   * para o WhatsApp e voltar sem perder o que preencheu.
    */
-  const [
-    clientSignature,
-    setClientSignature,
-  ] =
-    useState("");
-
-  const [
-    loading,
-    setLoading,
-  ] =
-    useState(false);
-
-  const [
-    error,
-    setError,
-  ] =
-    useState("");
-
-  const [
-    submitted,
-    setSubmitted,
-  ] =
-    useState(false);
-
-  function nextStep() {
-    setError("");
-
-    if (
-      step === 1
-    ) {
-      if (
-        !fullName.trim()
-      ) {
-        setError(
-          "Informe seu nome completo."
-        );
-
-        return;
-      }
-
-      if (
-        !phone.trim()
-      ) {
-        setError(
-          "Informe seu telefone."
-        );
-
-        return;
-      }
-
-      if (
-        !cpf.trim() &&
-        !rg.trim()
-      ) {
-        setError(
-          "Informe pelo menos um documento: CPF ou RG."
-        );
-
-        return;
-      }
-    }
-
-    setStep(
-      (
-        current
-      ) =>
-        Math.min(
-          4,
-          current + 1
-        )
-    );
-
-    window.scrollTo({
-      top:
-        0,
-      behavior:
-        "smooth",
-    });
-  }
-
-  function previousStep() {
-    setError("");
-
-    setStep(
-      (
-        current
-      ) =>
-        Math.max(
-          1,
-          current - 1
-        )
-    );
-
-    window.scrollTo({
-      top:
-        0,
-      behavior:
-        "smooth",
-    });
-  }
-
-  async function handleSubmit(
-    event:
-      FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
-
-    setError("");
-
-    if (
-      !acceptedTerms
-    ) {
-      setError(
-        "Você precisa aceitar o termo de responsabilidade."
-      );
-
-      return;
-    }
-
-    if (
-      imageAuthorized ===
-      null
-    ) {
-      setError(
-        "Informe se autoriza ou não o uso de imagem."
-      );
-
-      return;
-    }
-
-    if (
-      !clientSignature
-        .trim()
-    ) {
-      setError(
-        "Digite seu nome completo no campo de assinatura."
-      );
-
-      return;
-    }
-
-    setLoading(
-      true
-    );
+  useEffect(() => {
+    if (submitted) return;
 
     try {
-      const response =
-        await fetch(
-          `/api/anamnese/${token}`,
-          {
-            method:
-              "POST",
+      const draft: Draft = { savedAt: Date.now(), step, form };
+      window.localStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch {
+      /* Armazenamento indisponível (aba anônima etc.). */
+    }
+  }, [draftKey, form, step, submitted]);
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+  function update<K extends keyof FormState>(
+    key: K,
+    value: FormState[K]
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+    setError("");
+  }
 
-            body:
-              JSON.stringify({
-                fullName,
+  function toggleHealth(key: keyof HealthAnswers) {
+    setForm((current) => ({
+      ...current,
+      noHealthConditions: false,
+      health: { ...current.health, [key]: !current.health[key] },
+    }));
+    setError("");
+  }
 
-                cpf,
-                rg,
-                birthDate:
-                  birthDate ||
-                  null,
+  function toggleNoHealthConditions() {
+    setForm((current) => ({
+      ...current,
+      noHealthConditions: !current.noHealthConditions,
+      health: initialHealth,
+    }));
+    setError("");
+  }
 
-                phone,
-                email,
+  function goToStep(target: number) {
+    setError("");
+    setStep(Math.min(TOTAL_STEPS, Math.max(1, target)));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-                address,
-                city,
-                cep,
+  function nextStep() {
+    const stepError = validateStep(step, form);
 
-                howDidYouFindUs,
+    if (stepError) {
+      setError(stepError);
+      return;
+    }
 
-                ...health,
+    goToStep(step + 1);
+  }
 
-                otherHealthProblem,
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-                procedureType,
+    /*
+     * Envio só acontece na última etapa. Antes, o botão
+     * "Continuar" virava "Enviar" no mesmo toque e a ficha
+     * era submetida ao chegar na etapa 4.
+     */
+    if (step < TOTAL_STEPS) {
+      nextStep();
+      return;
+    }
 
-                imageAuthorized,
+    if (loading) return;
 
-                acceptedTerms,
+    for (let current = 1; current <= TOTAL_STEPS; current++) {
+      const stepError = validateStep(current, form);
 
-                clientSignature,
-              }),
-          }
-        );
+      if (stepError) {
+        if (current !== step) goToStep(current);
+        setError(stepError);
+        return;
+      }
+    }
 
-      const result =
-        await response.json();
+    setLoading(true);
+    setError("");
 
-      if (
-        !response.ok
-      ) {
+    try {
+      const response = await fetch(`/api/anamnese/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: form.fullName.trim(),
+          cpf: form.cpf,
+          rg: form.rg,
+          birthDate: toIsoDate(form.birthDate),
+          phone: form.phone,
+          email: form.email.trim(),
+          address: form.address,
+          city: form.city,
+          cep: form.cep,
+          howDidYouFindUs: form.howDidYouFindUs,
+          ...form.health,
+          otherHealthProblem: form.otherHealthProblem,
+          procedureType: form.procedureType,
+          imageAuthorized: form.imageAuthorized,
+          acceptedTerms: form.acceptedTerms,
+          clientSignature: form.clientSignature.trim(),
+        }),
+      });
+
+      const result = (await response.json().catch(() => null)) as {
+        error?: string;
+        alreadySubmitted?: boolean;
+      } | null;
+
+      if (!response.ok) {
         throw new Error(
-          result.error ||
-            "Não foi possível enviar a ficha."
+          result?.error ||
+            "Não foi possível enviar a ficha. Tente novamente em instantes."
         );
       }
 
-      setSubmitted(
-        true
-      );
+      try {
+        window.localStorage.removeItem(draftKey);
+      } catch {
+        /* sem armazenamento */
+      }
 
-      window.scrollTo({
-        top:
-          0,
-        behavior:
-          "smooth",
-      });
-    } catch (
-      submitError
-    ) {
+      setSubmitted(result?.alreadySubmitted ? "already" : "sent");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (submitError) {
       setError(
-        submitError instanceof
-          Error
-          ? submitError.message
-          : "Não foi possível enviar a ficha."
+        submitError instanceof TypeError
+          ? "Sem conexão com a internet. Verifique sua rede e toque em Enviar novamente."
+          : submitError instanceof Error
+            ? submitError.message
+            : "Não foi possível enviar a ficha."
       );
     } finally {
-      setLoading(
-        false
-      );
+      setLoading(false);
     }
   }
 
-  if (
-    submitted
-  ) {
+  if (submitted) {
     return (
-      <main
-        className="
-          flex
-          min-h-dvh
-          items-center
-          justify-center
-          bg-[#F7F6F2]
-          px-4
-          py-10
-        "
-      >
-        <div
-          className="
-            w-full
-            max-w-lg
-            rounded-3xl
-            border
-            border-black/10
-            bg-white
-            p-8
-            text-center
-            shadow-sm
-          "
-        >
-          <CheckCircle2
-            className="
-              mx-auto
-              h-14
-              w-14
-              text-green-600
-            "
-          />
+      <main className="flex min-h-dvh items-center justify-center bg-[#F7F6F2] px-4 py-10">
+        <div className="w-full max-w-lg rounded-3xl border border-black/10 bg-white p-8 text-center shadow-sm">
+          <CheckCircle2 className="mx-auto h-14 w-14 text-green-600" />
 
-          <h1
-            className="
-              mt-6
-              font-serif
-              text-3xl
-              font-semibold
-              text-[#111]
-            "
-          >
+          <h1 className="mt-6 font-serif text-3xl font-semibold text-[#111]">
             Ficha enviada
           </h1>
 
-          <p
-            className="
-              mt-3
-              text-sm
-              leading-6
-              text-black/50
-            "
-          >
-            Obrigada! Suas informações
-            foram enviadas com sucesso
-            para o Studio Arrasou
-            Sobrancelhas.
+          <p className="mt-3 text-sm leading-6 text-black/50">
+            {submitted === "already"
+              ? "Sua ficha já havia sido recebida pelo Studio Arrasou Sobrancelhas. Não é preciso enviar novamente."
+              : "Obrigada! Suas informações foram enviadas com sucesso para o Studio Arrasou Sobrancelhas."}
           </p>
         </div>
       </main>
@@ -640,394 +377,136 @@ export default function AnamnesisPublicForm({
   }
 
   return (
-    <main
-      className="
-        min-h-dvh
-        bg-[#F7F6F2]
-        px-4
-        py-6
-
-        sm:py-10
-      "
-    >
+    <main className="min-h-dvh bg-[#F7F6F2] sm:px-4 sm:py-10">
       <form
-        onSubmit={
-          handleSubmit
-        }
-        className="
-          mx-auto
-          w-full
-          max-w-2xl
-          overflow-hidden
-          rounded-3xl
-          border
-          border-black/10
-          bg-white
-          shadow-sm
-        "
+        onSubmit={handleSubmit}
+        noValidate
+        className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col bg-white sm:min-h-0 sm:overflow-hidden sm:rounded-3xl sm:border sm:border-black/10 sm:shadow-sm"
       >
-        {/* HEADER */}
-
-        <div
-          className="
-            border-b
-            border-black/10
-            p-6
-
-            sm:p-8
-          "
-        >
-          <p
-            className="
-              text-[10px]
-              font-semibold
-              uppercase
-              tracking-[0.25em]
-              text-[#C9A227]
-            "
-          >
+        {/* CABEÇALHO */}
+        <div className="border-b border-black/10 px-5 pb-5 pt-6 sm:p-8">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#C9A227]">
             Studio Arrasou
           </p>
 
-          <h1
-            className="
-              mt-3
-              font-serif
-              text-3xl
-              font-semibold
-              text-[#111]
-
-              sm:text-4xl
-            "
-          >
+          <h1 className="mt-2 font-serif text-[1.75rem] font-semibold leading-tight text-[#111] sm:text-4xl">
             Ficha de Anamnese
           </h1>
 
-          <p
-            className="
-              mt-3
-              text-sm
-              leading-6
-              text-black/45
-            "
-          >
-            Preencha com atenção. As
-            informações são importantes
-            para a segurança do seu
-            procedimento.
-          </p>
+          {step === 1 && (
+            <p className="mt-2 text-sm leading-6 text-black/50">
+              Leva cerca de 3 minutos. Suas respostas ficam salvas
+              neste aparelho até o envio.
+            </p>
+          )}
 
-          <div
-            className="
-              mt-6
-              h-1.5
-              overflow-hidden
-              rounded-full
-              bg-black/[0.06]
-            "
-          >
-            <div
-              className="
-                h-full
-                rounded-full
-                bg-[#C9A227]
-                transition-all
-              "
-              style={{
-                width:
-                  `${
-                    step *
-                    25
-                  }%`,
-              }}
-            />
-          </div>
+          <ol className="mt-5 grid grid-cols-4 gap-1.5" aria-label="Etapas">
+            {STEP_NAMES.map((name, index) => {
+              const number = index + 1;
 
-          <p
-            className="
-              mt-2
-              text-[10px]
-              font-semibold
-              uppercase
-              tracking-wider
-              text-black/30
-            "
-          >
-            Etapa {step} de 4
-          </p>
+              return (
+                <li key={name}>
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${
+                      number <= step ? "bg-[#C9A227]" : "bg-black/[0.08]"
+                    }`}
+                  />
+                  <p
+                    className={`mt-1.5 truncate text-[10px] font-semibold uppercase tracking-wide ${
+                      number === step ? "text-[#8A6D0A]" : "text-black/30"
+                    }`}
+                  >
+                    {name}
+                  </p>
+                </li>
+              );
+            })}
+          </ol>
         </div>
 
-        <div
-          className="
-            p-5
-
-            sm:p-8
-          "
-        >
-          {step ===
-            1 && (
-            <PersonalDataStep
-              fullName={
-                fullName
-              }
-              setFullName={
-                setFullName
-              }
-              cpf={
-                cpf
-              }
-              setCpf={
-                setCpf
-              }
-              rg={
-                rg
-              }
-              setRg={
-                setRg
-              }
-              birthDate={
-                birthDate
-              }
-              setBirthDate={
-                setBirthDate
-              }
-              phone={
-                phone
-              }
-              setPhone={
-                setPhone
-              }
-              email={
-                email
-              }
-              setEmail={
-                setEmail
-              }
-              address={
-                address
-              }
-              setAddress={
-                setAddress
-              }
-              city={
-                city
-              }
-              setCity={
-                setCity
-              }
-              cep={
-                cep
-              }
-              setCep={
-                setCep
-              }
-              howDidYouFindUs={
-                howDidYouFindUs
-              }
-              setHowDidYouFindUs={
-                setHowDidYouFindUs
-              }
-            />
+        {/* ETAPAS (pb extra no celular: espaço do rodapé fixo) */}
+        <div className="flex-1 px-5 pb-48 pt-6 sm:p-8">
+          {step === 1 && (
+            <PersonalDataStep form={form} update={update} />
           )}
 
-          {step ===
-            2 && (
+          {step === 2 && (
             <HealthStep
-              health={
-                health
-              }
-              setHealth={
-                setHealth
-              }
-              otherHealthProblem={
-                otherHealthProblem
-              }
-              setOtherHealthProblem={
-                setOtherHealthProblem
-              }
+              form={form}
+              toggleHealth={toggleHealth}
+              toggleNoHealthConditions={toggleNoHealthConditions}
+              update={update}
             />
           )}
 
-          {step ===
-            3 && (
-            <ProcedureStep
-              procedureType={
-                procedureType
-              }
-              setProcedureType={
-                setProcedureType
-              }
-            />
+          {step === 3 && (
+            <ProcedureStep form={form} update={update} />
           )}
 
-          {step ===
-            4 && (
-            <ConsentStep
-              imageAuthorized={
-                imageAuthorized
-              }
-              setImageAuthorized={
-                setImageAuthorized
-              }
-              acceptedTerms={
-                acceptedTerms
-              }
-              setAcceptedTerms={
-                setAcceptedTerms
-              }
-              clientSignature={
-                clientSignature
-              }
-              setClientSignature={
-                setClientSignature
-              }
-            />
+          {step === 4 && (
+            <ConsentStep form={form} update={update} />
           )}
+        </div>
 
+        {/*
+         * RODAPÉ FIXO no celular: erro + navegação sempre visíveis.
+         * "fixed" e não "sticky": o body global tem overflow-x
+         * hidden, o que desativa o sticky.
+         */}
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-black/10 bg-white/95 px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:static sm:z-auto sm:px-8 sm:pb-6">
           {error && (
             <div
               role="alert"
-              className="
-                mt-6
-                rounded-xl
-                border
-                border-red-200
-                bg-red-50
-                px-4
-                py-3
-                text-sm
-                text-red-700
-              "
+              className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-700"
             >
               {error}
             </div>
           )}
-        </div>
 
-        <div
-          className="
-            flex
-            gap-3
-            border-t
-            border-black/10
-            p-5
+          <div className="flex gap-3">
+            {step > 1 && (
+              <button
+                key="back"
+                type="button"
+                onClick={() => goToStep(step - 1)}
+                disabled={loading}
+                className="flex h-12 items-center justify-center gap-1 rounded-xl border border-black/10 px-4 text-sm font-semibold text-black/60 disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Voltar
+              </button>
+            )}
 
-            sm:p-6
-          "
-        >
-          {step >
-            1 && (
-            <button
-              type="button"
-              onClick={
-                previousStep
-              }
-              className="
-                flex
-                min-h-12
-                items-center
-                justify-center
-                gap-2
-                rounded-xl
-                border
-                border-black/10
-                px-5
-                text-sm
-                font-semibold
-                text-black/55
-              "
-            >
-              <ChevronLeft
-                className="
-                  h-4
-                  w-4
-                "
-              />
-
-              Voltar
-            </button>
-          )}
-
-          {step <
-          4 ? (
-            <button
-              type="button"
-              onClick={
-                nextStep
-              }
-              className="
-                ml-auto
-                flex
-                min-h-12
-                flex-1
-                items-center
-                justify-center
-                gap-2
-                rounded-xl
-                bg-[#C9A227]
-                px-6
-                text-sm
-                font-semibold
-                text-black
-
-                sm:flex-none
-              "
-            >
-              Continuar
-
-              <ChevronRight
-                className="
-                  h-4
-                  w-4
-                "
-              />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={
-                loading
-              }
-              className="
-                ml-auto
-                flex
-                min-h-12
-                flex-1
-                items-center
-                justify-center
-                gap-2
-                rounded-xl
-                bg-[#C9A227]
-                px-6
-                text-sm
-                font-semibold
-                text-black
-
-                disabled:opacity-60
-
-                sm:flex-none
-              "
-            >
-              {loading ? (
-                <Loader2
-                  className="
-                    h-4
-                    w-4
-                    animate-spin
-                  "
-                />
-              ) : (
-                <ShieldCheck
-                  className="
-                    h-4
-                    w-4
-                  "
-                />
-              )}
-
-              Enviar ficha
-            </button>
-          )}
+            {/*
+             * "key" diferente: o React não reaproveita o botão
+             * "Continuar" como "Enviar" no meio do toque.
+             */}
+            {step < TOTAL_STEPS ? (
+              <button
+                key="next"
+                type="button"
+                onClick={nextStep}
+                className="flex h-12 flex-1 items-center justify-center gap-1 rounded-xl bg-[#C9A227] text-sm font-semibold text-black active:scale-[0.99]"
+              >
+                Continuar
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                key="submit"
+                type="submit"
+                disabled={loading}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#111] text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                {loading ? "Enviando..." : "Enviar ficha"}
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </main>
@@ -1036,221 +515,164 @@ export default function AnamnesisPublicForm({
 
 /*
  * ============================================================
- * ETAPA 1
+ * VALIDAÇÃO POR ETAPA
  * ============================================================
  */
 
-function PersonalDataStep(
-  props: {
-    fullName: string;
-    setFullName:
-      (value: string) =>
-        void;
+function validateStep(step: number, form: FormState): string {
+  if (step === 1) {
+    if (!form.fullName.trim()) return "Informe seu nome completo.";
 
-    cpf: string;
-    setCpf:
-      (value: string) =>
-        void;
+    if (onlyDigits(form.phone).length < 10)
+      return "Informe seu telefone com DDD.";
 
-    rg: string;
-    setRg:
-      (value: string) =>
-        void;
+    if (!onlyDigits(form.cpf) && !form.rg.trim())
+      return "Informe pelo menos um documento: CPF ou RG.";
 
-    birthDate: string;
-    setBirthDate:
-      (value: string) =>
-        void;
+    if (form.cpf && onlyDigits(form.cpf).length !== 11)
+      return "O CPF deve ter 11 números.";
 
-    phone: string;
-    setPhone:
-      (value: string) =>
-        void;
+    if (form.birthDate && !toIsoDate(form.birthDate))
+      return "Data de nascimento inválida. Use o formato DD/MM/AAAA.";
 
-    email: string;
-    setEmail:
-      (value: string) =>
-        void;
-
-    address: string;
-    setAddress:
-      (value: string) =>
-        void;
-
-    city: string;
-    setCity:
-      (value: string) =>
-        void;
-
-    cep: string;
-    setCep:
-      (value: string) =>
-        void;
-
-    howDidYouFindUs: string;
-
-    setHowDidYouFindUs:
-      (value: string) =>
-        void;
+    if (form.email.trim() && !/^\S+@\S+\.\S+$/.test(form.email.trim()))
+      return "Confira o e-mail informado.";
   }
-) {
+
+  if (step === 2) {
+    const anyCondition = Object.values(form.health).some(Boolean);
+
+    if (!anyCondition && !form.noHealthConditions)
+      return 'Marque as condições que se aplicam a você ou toque em "Não tenho nenhuma dessas condições".';
+  }
+
+  if (step === 4) {
+    if (form.imageAuthorized === null)
+      return "Informe se autoriza ou não o uso de imagem.";
+
+    if (!form.acceptedTerms)
+      return "Para enviar, confirme que leu e está de acordo com o termo.";
+
+    if (!form.clientSignature.trim())
+      return "Digite seu nome completo no campo de assinatura.";
+  }
+
+  return "";
+}
+
+/*
+ * ============================================================
+ * ETAPA 1 — DADOS
+ * ============================================================
+ */
+
+type StepProps = {
+  form: FormState;
+  update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+};
+
+function PersonalDataStep({ form, update }: StepProps) {
   return (
     <div>
       <StepTitle
         title="Seus dados"
-        description="Nome, telefone e pelo menos um documento são obrigatórios. Os demais campos são opcionais."
+        description="Nome, telefone e pelo menos um documento (CPF ou RG) são obrigatórios."
       />
 
       <div className="mt-6 space-y-4">
         <Field
-          label="Nome completo *"
-          value={
-            props.fullName
-          }
-          onChange={
-            props.setFullName
-          }
+          label="Nome completo"
           required
+          value={form.fullName}
+          onChange={(value) => update("fullName", value)}
+          autoComplete="name"
+          autoCapitalize="words"
         />
 
-        <div
-          className="
-            grid
-            gap-4
+        <Field
+          label="Telefone / WhatsApp"
+          required
+          value={form.phone}
+          onChange={(value) => update("phone", maskPhone(value))}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel-national"
+          placeholder="(13) 99999-9999"
+        />
 
-            sm:grid-cols-2
-          "
-        >
+        <div className="grid grid-cols-2 gap-3">
           <Field
             label="CPF"
-            value={
-              props.cpf
-            }
-            onChange={
-              props.setCpf
-            }
+            value={form.cpf}
+            onChange={(value) => update("cpf", maskCpf(value))}
+            inputMode="numeric"
+            placeholder="000.000.000-00"
           />
 
           <Field
             label="RG"
-            value={
-              props.rg
-            }
-            onChange={
-              props.setRg
-            }
-          />
-        </div>
-
-        <p
-          className="
-            -mt-2
-            text-[11px]
-            text-black/35
-          "
-        >
-          Informe pelo menos um documento: CPF ou RG.
-        </p>
-
-        <label>
-          <FieldLabel>
-            Data de nascimento
-          </FieldLabel>
-
-          <input
-            type="date"
-            value={
-              props.birthDate
-            }
-            onChange={(
-              event
-            ) =>
-              props.setBirthDate(
-                event.target.value
-              )
-            }
-            className={inputClass}
-          />
-        </label>
-
-        <div
-          className="
-            grid
-            gap-4
-
-            sm:grid-cols-2
-          "
-        >
-          <Field
-            label="Telefone / WhatsApp *"
-            value={
-              props.phone
-            }
-            onChange={
-              props.setPhone
-            }
-            required
-          />
-
-          <Field
-            label="E-mail"
-            type="email"
-            value={
-              props.email
-            }
-            onChange={
-              props.setEmail
-            }
+            value={form.rg}
+            onChange={(value) => update("rg", value.slice(0, 20))}
+            inputMode="text"
           />
         </div>
 
         <Field
-          label="Endereço"
-          value={
-            props.address
-          }
-          onChange={
-            props.setAddress
-          }
+          label="Data de nascimento"
+          value={form.birthDate}
+          onChange={(value) => update("birthDate", maskDate(value))}
+          inputMode="numeric"
+          autoComplete="bday"
+          placeholder="DD/MM/AAAA"
         />
 
-        <div
-          className="
-            grid
-            gap-4
+        <Field
+          label="E-mail"
+          value={form.email}
+          onChange={(value) => update("email", value)}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+        />
 
-            sm:grid-cols-2
-          "
-        >
-          <Field
-            label="Cidade"
-            value={
-              props.city
-            }
-            onChange={
-              props.setCity
-            }
-          />
+        <fieldset className="rounded-2xl border border-black/10 p-4">
+          <legend className="px-1 text-xs font-semibold text-black/45">
+            Endereço (opcional)
+          </legend>
 
-          <Field
-            label="CEP"
-            value={
-              props.cep
-            }
-            onChange={
-              props.setCep
-            }
-          />
-        </div>
+          <div className="space-y-4">
+            <Field
+              label="CEP"
+              value={form.cep}
+              onChange={(value) => update("cep", maskCep(value))}
+              inputMode="numeric"
+              autoComplete="postal-code"
+              placeholder="00000-000"
+            />
+
+            <Field
+              label="Endereço"
+              value={form.address}
+              onChange={(value) => update("address", value)}
+              autoComplete="street-address"
+              placeholder="Rua, número, complemento"
+            />
+
+            <Field
+              label="Cidade"
+              value={form.city}
+              onChange={(value) => update("city", value)}
+              autoComplete="address-level2"
+            />
+          </div>
+        </fieldset>
 
         <Field
           label="Como nos conheceu?"
-          value={
-            props.howDidYouFindUs
-          }
-          onChange={
-            props.setHowDidYouFindUs
-          }
+          value={form.howDidYouFindUs}
+          onChange={(value) => update("howDidYouFindUs", value)}
+          placeholder="Instagram, indicação, passando na rua..."
         />
       </div>
     </div>
@@ -1259,153 +681,64 @@ function PersonalDataStep(
 
 /*
  * ============================================================
- * ETAPA 2
+ * ETAPA 2 — SAÚDE
  * ============================================================
  */
 
 function HealthStep({
-  health,
-  setHealth,
-  otherHealthProblem,
-  setOtherHealthProblem,
-}: {
-  health:
-    HealthAnswers;
-
-  setHealth:
-    React.Dispatch<
-      React.SetStateAction<HealthAnswers>
-    >;
-
-  otherHealthProblem:
-    string;
-
-  setOtherHealthProblem:
-    (value: string) =>
-      void;
+  form,
+  update,
+  toggleHealth,
+  toggleNoHealthConditions,
+}: StepProps & {
+  toggleHealth: (key: keyof HealthAnswers) => void;
+  toggleNoHealthConditions: () => void;
 }) {
   return (
     <div>
       <StepTitle
         title="Histórico de saúde"
-        description="Marque Sim quando a condição se aplicar a você."
+        description="Toque nas condições que se aplicam a você. Se nenhuma se aplicar, use o botão abaixo da lista."
       />
 
-      <div
-        className="
-          mt-6
-          space-y-3
-        "
-      >
-        {healthQuestions.map(
-          (
-            question
-          ) => (
-            <div
-              key={
-                question.key
-              }
-              className="
-                flex
-                items-center
-                justify-between
-                gap-4
-                rounded-xl
-                border
-                border-black/[0.08]
-                p-4
-              "
-            >
-              <p
-                className="
-                  text-sm
-                  font-medium
-                  text-[#111]
-                "
-              >
-                {
-                  question.label
-                }
-              </p>
-
-              <div
-                className="
-                  flex
-                  shrink-0
-                  gap-2
-                "
-              >
-                <YesNoButton
-                  active={
-                    health[
-                      question.key
-                    ]
-                  }
-                  onClick={() =>
-                    setHealth(
-                      (
-                        current
-                      ) => ({
-                        ...current,
-
-                        [question.key]:
-                          true,
-                      })
-                    )
-                  }
-                >
-                  Sim
-                </YesNoButton>
-
-                <YesNoButton
-                  active={
-                    !health[
-                      question.key
-                    ]
-                  }
-                  onClick={() =>
-                    setHealth(
-                      (
-                        current
-                      ) => ({
-                        ...current,
-
-                        [question.key]:
-                          false,
-                      })
-                    )
-                  }
-                >
-                  Não
-                </YesNoButton>
-              </div>
-            </div>
-          )
-        )}
+      <div className="mt-6 grid grid-cols-2 gap-2">
+        {healthQuestions.map((question) => (
+          <ChoiceChip
+            key={question.key}
+            active={form.health[question.key]}
+            onClick={() => toggleHealth(question.key)}
+          >
+            {question.label}
+          </ChoiceChip>
+        ))}
       </div>
 
-      <label
-        className="
-          mt-6
-          block
-        "
+      <button
+        type="button"
+        onClick={toggleNoHealthConditions}
+        aria-pressed={form.noHealthConditions}
+        className={`mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${
+          form.noHealthConditions
+            ? "border-green-600 bg-green-50 text-green-800"
+            : "border-black/15 text-black/60"
+        }`}
       >
+        {form.noHealthConditions && <Check className="h-4 w-4" />}
+        Não tenho nenhuma dessas condições
+      </button>
+
+      <label className="mt-6 block">
         <FieldLabel>
-          Possui algum problema de
-          saúde não citado acima?
+          {form.health.allergies || form.health.continuousMedication
+            ? "Conte mais: quais alergias ou medicamentos?"
+            : "Algum outro problema de saúde ou observação? (opcional)"}
         </FieldLabel>
 
         <textarea
-          rows={4}
-          value={
-            otherHealthProblem
-          }
-          onChange={(
-            event
-          ) =>
-            setOtherHealthProblem(
-              event.target.value
-            )
+          rows={3}
+          value={form.otherHealthProblem}
+          onChange={(event) =>
+            update("otherHealthProblem", event.target.value)
           }
           className={`${inputClass} h-auto py-3`}
         />
@@ -1416,118 +749,34 @@ function HealthStep({
 
 /*
  * ============================================================
- * ETAPA 3
+ * ETAPA 3 — PROCEDIMENTO
  * ============================================================
  */
 
-function ProcedureStep({
-  procedureType,
-  setProcedureType,
-}: {
-  procedureType:
-    string;
-
-  setProcedureType:
-    (value: string) =>
-      void;
-}) {
-  const procedures = [
-    {
-      value:
-        "sobrancelhas",
-      label:
-        "Sobrancelhas",
-    },
-    {
-      value:
-        "labios",
-      label:
-        "Lábios",
-    },
-    {
-      value:
-        "olhos",
-      label:
-        "Olhos",
-    },
-    {
-      value:
-        "cilios",
-      label:
-        "Cílios",
-    },
-  ];
-
+function ProcedureStep({ form, update }: StepProps) {
   return (
     <div>
       <StepTitle
         title="Procedimento"
-        description="Selecione o procedimento relacionado à ficha."
+        description="Selecione o procedimento relacionado a esta ficha."
       />
 
-      <div
-        className="
-          mt-6
-          grid
-          gap-3
-
-          sm:grid-cols-2
-        "
-      >
-        {procedures.map(
-          (
-            procedure
-          ) => (
-            <button
-              key={
-                procedure.value
-              }
-              type="button"
-              onClick={() =>
-                setProcedureType(
-                  procedure.value
-                )
-              }
-              className={`
-                min-h-14
-                rounded-xl
-                border
-                px-4
-                text-sm
-                font-semibold
-                transition-all
-
-                ${
-                  procedureType ===
-                  procedure.value
-                    ? "border-[#C9A227] bg-[#C9A227]/10 text-[#111]"
-                    : "border-black/10 text-black/50"
-                }
-              `}
-            >
-              {
-                procedure.label
-              }
-            </button>
-          )
-        )}
-      </div>
-
-      <div
-        className="
-          mt-6
-          rounded-xl
-          bg-[#FAFAF8]
-          p-4
-          text-xs
-          leading-5
-          text-black/45
-        "
-      >
-        Técnica, pigmento,
-        agulha/lâmina, fototipo e
-        cor da pele serão preenchidos
-        pela profissional no Studio.
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        {procedures.map((procedure) => (
+          <ChoiceChip
+            key={procedure.value}
+            active={form.procedureType === procedure.value}
+            onClick={() =>
+              update(
+                "procedureType",
+                form.procedureType === procedure.value ? "" : procedure.value
+              )
+            }
+            tall
+          >
+            {procedure.label}
+          </ChoiceChip>
+        ))}
       </div>
     </div>
   );
@@ -1535,39 +784,11 @@ function ProcedureStep({
 
 /*
  * ============================================================
- * ETAPA 4
+ * ETAPA 4 — TERMO
  * ============================================================
  */
 
-function ConsentStep({
-  imageAuthorized,
-  setImageAuthorized,
-  acceptedTerms,
-  setAcceptedTerms,
-  clientSignature,
-  setClientSignature,
-}: {
-  imageAuthorized:
-    boolean | null;
-
-  setImageAuthorized:
-    (value: boolean) =>
-      void;
-
-  acceptedTerms:
-    boolean;
-
-  setAcceptedTerms:
-    (value: boolean) =>
-      void;
-
-  clientSignature:
-    string;
-
-  setClientSignature:
-    (value: string) =>
-      void;
-}) {
+function ConsentStep({ form, update }: StepProps) {
   return (
     <div>
       <StepTitle
@@ -1575,187 +796,69 @@ function ConsentStep({
         description="Leia antes de finalizar sua ficha."
       />
 
-      <div
-        className="
-          mt-6
-          rounded-2xl
-          bg-[#FAFAF8]
-          p-5
-          text-sm
-          leading-7
-          text-black/60
-        "
-      >
-        Declaro que as informações
-        fornecidas são verdadeiras.
-        Estou ciente das orientações,
-        cuidados e possíveis
-        intercorrências do procedimento.
-        Autorizo o registro fotográfico
-        para acompanhamento e, quando
-        autorizado abaixo, para
-        divulgação.
+      <div className="mt-6 rounded-2xl bg-[#FAFAF8] p-4 text-sm leading-6 text-black/60">
+        Declaro que as informações fornecidas são verdadeiras. Estou
+        ciente das orientações, cuidados e possíveis intercorrências do
+        procedimento. Autorizo o registro fotográfico para
+        acompanhamento e, quando autorizado abaixo, para divulgação.
       </div>
 
-      <div
-        className="
-          mt-6
-        "
-      >
-        <FieldLabel>
-          Uso de imagem
-        </FieldLabel>
+      <p className="mt-6 text-xs font-semibold text-[#111]">
+        Uso de imagem para divulgação *
+      </p>
 
-        <div
-          className="
-            grid
-            gap-3
-
-            sm:grid-cols-2
-          "
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <ChoiceChip
+          active={form.imageAuthorized === true}
+          onClick={() => update("imageAuthorized", true)}
         >
-          <button
-            type="button"
-            onClick={() =>
-              setImageAuthorized(
-                true
-              )
-            }
-            className={`
-              min-h-12
-              rounded-xl
-              border
-              text-sm
-              font-semibold
+          Autorizo
+        </ChoiceChip>
 
-              ${
-                imageAuthorized ===
-                true
-                  ? "border-[#C9A227] bg-[#C9A227]/10 text-[#111]"
-                  : "border-black/10 text-black/50"
-              }
-            `}
-          >
-            Autorizo
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              setImageAuthorized(
-                false
-              )
-            }
-            className={`
-              min-h-12
-              rounded-xl
-              border
-              text-sm
-              font-semibold
-
-              ${
-                imageAuthorized ===
-                false
-                  ? "border-[#C9A227] bg-[#C9A227]/10 text-[#111]"
-                  : "border-black/10 text-black/50"
-              }
-            `}
-          >
-            Não autorizo
-          </button>
-        </div>
+        <ChoiceChip
+          active={form.imageAuthorized === false}
+          onClick={() => update("imageAuthorized", false)}
+        >
+          Não autorizo
+        </ChoiceChip>
       </div>
 
-      <label
-        className="
-          mt-6
-          flex
-          items-start
-          gap-3
-          rounded-xl
-          border
-          border-black/10
-          p-4
-        "
-      >
+      <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-black/10 p-4">
         <input
           type="checkbox"
-          checked={
-            acceptedTerms
-          }
-          onChange={(
-            event
-          ) =>
-            setAcceptedTerms(
-              event.target.checked
-            )
-          }
-          className="
-            mt-1
-            h-4
-            w-4
-            accent-[#C9A227]
-          "
+          checked={form.acceptedTerms}
+          onChange={(event) => update("acceptedTerms", event.target.checked)}
+          className="mt-0.5 h-5 w-5 shrink-0 accent-[#C9A227]"
         />
-
-        <span
-          className="
-            text-sm
-            leading-6
-            text-black/60
-          "
-        >
-          Li as informações acima,
-          confirmo que os dados
-          fornecidos são verdadeiros
-          e estou de acordo com o
-          termo de responsabilidade.
+        <span className="text-sm leading-6 text-black/70">
+          Li as informações acima, confirmo que os dados fornecidos são
+          verdadeiros e estou de acordo com o termo de responsabilidade.
         </span>
       </label>
 
-      <label
-        className="
-          mt-6
-          block
-        "
-      >
-        <FieldLabel>
-          Assinatura da cliente
-        </FieldLabel>
-
-        <p
-          className="
-            mb-2
-            text-xs
-            text-black/35
-          "
-        >
-          Digite seu nome completo
-          como confirmação.
-        </p>
-
-        <input
-          value={
-            clientSignature
-          }
-          onChange={(
-            event
-          ) =>
-            setClientSignature(
-              event.target.value
-            )
-          }
-          placeholder="Seu nome completo"
-          className={inputClass}
+      <div className="mt-6">
+        <Field
+          label="Assinatura da cliente"
+          required
+          value={form.clientSignature}
+          onChange={(value) => update("clientSignature", value)}
+          autoComplete="name"
+          autoCapitalize="words"
+          enterKeyHint="send"
+          placeholder="Digite seu nome completo"
         />
-      </label>
+
+        <p className="mt-2 text-xs text-black/40">
+          Digitar seu nome completo vale como confirmação.
+        </p>
+      </div>
     </div>
   );
 }
 
 /*
  * ============================================================
- * COMPONENTES
+ * COMPONENTES DE APOIO
  * ============================================================
  */
 
@@ -1768,24 +871,10 @@ function StepTitle({
 }) {
   return (
     <div>
-      <h2
-        className="
-          font-serif
-          text-2xl
-          font-semibold
-          text-[#111]
-        "
-      >
+      <h2 className="font-serif text-2xl font-semibold text-[#111]">
         {title}
       </h2>
-
-      <p
-        className="
-          mt-1
-          text-sm
-          text-black/40
-        "
-      >
+      <p className="mt-1.5 text-sm leading-6 text-black/50">
         {description}
       </p>
     </div>
@@ -1796,123 +885,185 @@ function Field({
   label,
   value,
   onChange,
-  type = "text",
   required = false,
+  type = "text",
+  inputMode,
+  autoComplete,
+  autoCapitalize,
+  enterKeyHint = "next",
+  placeholder,
 }: {
   label: string;
   value: string;
-
-  onChange:
-    (value: string) =>
-      void;
-
-  type?: string;
+  onChange: (value: string) => void;
   required?: boolean;
+  type?: string;
+  inputMode?: "text" | "tel" | "email" | "numeric";
+  autoComplete?: string;
+  autoCapitalize?: string;
+  enterKeyHint?: "next" | "send" | "done";
+  placeholder?: string;
 }) {
   return (
-    <label>
+    <label className="block">
       <FieldLabel>
         {label}
+        {required && <span className="text-[#C9A227]"> *</span>}
       </FieldLabel>
 
       <input
-        type={
-          type
-        }
-        value={
-          value
-        }
-        required={
-          required
-        }
-        onChange={(
-          event
-        ) =>
-          onChange(
-            event.target.value
-          )
-        }
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        autoCapitalize={autoCapitalize}
+        enterKeyHint={enterKeyHint}
+        placeholder={placeholder}
         className={inputClass}
       />
     </label>
   );
 }
 
-function FieldLabel({
-  children,
-}: {
-  children:
-    React.ReactNode;
-}) {
+function FieldLabel({ children }: { children: ReactNode }) {
   return (
-    <span
-      className="
-        mb-2
-        block
-        text-xs
-        font-semibold
-        text-[#111]
-      "
-    >
+    <span className="mb-1.5 block text-xs font-semibold text-[#111]">
       {children}
     </span>
   );
 }
 
-function YesNoButton({
+function ChoiceChip({
   active,
   onClick,
   children,
+  tall = false,
 }: {
   active: boolean;
-
-  onClick:
-    () => void;
-
-  children:
-    React.ReactNode;
+  onClick: () => void;
+  children: ReactNode;
+  tall?: boolean;
 }) {
   return (
     <button
       type="button"
-      onClick={
-        onClick
-      }
-      className={`
-        min-h-10
-        min-w-12
-        rounded-lg
-        border
-        px-3
-        text-xs
-        font-semibold
-
-        ${
-          active
-            ? "border-[#C9A227] bg-[#C9A227]/10 text-[#111]"
-            : "border-black/10 text-black/35"
-        }
-      `}
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-center gap-2 rounded-xl border px-3 text-left text-sm font-medium leading-5 transition ${
+        tall ? "min-h-16" : "min-h-12 py-2"
+      } ${
+        active
+          ? "border-[#C9A227] bg-[#C9A227]/10 text-[#111]"
+          : "border-black/10 text-black/60"
+      }`}
     >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+          active ? "border-[#C9A227] bg-[#C9A227] text-black" : "border-black/20"
+        }`}
+      >
+        {active && <Check className="h-3 w-3" />}
+      </span>
       {children}
     </button>
   );
 }
 
-const inputClass = `
-  h-12
-  w-full
-  rounded-xl
-  border
-  border-black/10
-  bg-white
-  px-4
-  text-base
-  text-[#111]
-  outline-none
-  transition
-  focus:border-[#C9A227]/60
- focus:ring-2
-  focus:ring-[#C9A227]/10
-  sm:text-sm
-`;
+/* text-base (16px) no celular evita o zoom automático do iPhone. */
+const inputClass =
+  "h-12 w-full rounded-xl border border-black/10 bg-white px-4 text-base text-[#111] outline-none transition placeholder:text-black/25 focus:border-[#C9A227]/60 focus:ring-2 focus:ring-[#C9A227]/10 sm:text-sm";
+
+/*
+ * ============================================================
+ * UTILITÁRIOS
+ * ============================================================
+ */
+
+function readDraft(key: string): Draft | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+
+    const draft = JSON.parse(raw) as Draft;
+
+    if (
+      !draft?.form ||
+      typeof draft.savedAt !== "number" ||
+      Date.now() - draft.savedAt > DRAFT_MAX_AGE_MS
+    ) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+
+    return {
+      ...draft,
+      step: Math.min(TOTAL_STEPS, Math.max(1, Number(draft.step) || 1)),
+      form: {
+        ...draft.form,
+        health: { ...initialHealth, ...draft.form.health },
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function maskCpf(value: string) {
+  const d = onlyDigits(value).slice(0, 11);
+  return d
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
+}
+
+function maskPhone(value: string) {
+  let d = onlyDigits(value);
+
+  /* Remove o 55 de números salvos com DDI. */
+  if (d.length > 11 && d.startsWith("55")) d = d.slice(2);
+  d = d.slice(0, 11);
+
+  if (d.length <= 2) return d.length ? `(${d}` : "";
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10)
+    return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+function maskCep(value: string) {
+  const d = onlyDigits(value).slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
+function maskDate(value: string) {
+  const d = onlyDigits(value).slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
+/* DD/MM/AAAA -> AAAA-MM-DD; null se vazia ou inválida. */
+function toIsoDate(value: string): string | null {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) return null;
+
+  const [, day, month, year] = match;
+  const iso = `${year}-${month}-${day}`;
+  const date = new Date(`${iso}T12:00:00Z`);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== iso ||
+    Number(year) < 1900 ||
+    date.getTime() > Date.now()
+  ) {
+    return null;
+  }
+
+  return iso;
+}
