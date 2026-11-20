@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Clock3,
+  HandCoins,
   Loader2,
   Phone,
   RefreshCw,
@@ -49,9 +50,16 @@ type AppointmentDetailsModalProps = {
   open: boolean;
   appointmentId: string | null;
   isReceptionist: boolean;
+  /*
+   * Admin e recepção registram o sinal;
+   * demais usuários só visualizam.
+   */
+  canManageDeposit?: boolean;
   onClose: () => void;
   onUpdated: () => void | Promise<void>;
 };
+
+const DEFAULT_DEPOSIT_AMOUNT = 20;
 
 type ClientRelation = {
   id: string;
@@ -129,6 +137,8 @@ type AppointmentDetails = {
   notes: string | null;
   payment_method: PaymentMethod | null;
   completed_at: string | null;
+  deposit_amount: number | string | null;
+  deposit_paid_at: string | null;
   clients: SupabaseRelation<ClientRelation>;
   professionals: SupabaseRelation<ProfessionalRelation>;
   appointment_services: AppointmentService[];
@@ -138,6 +148,7 @@ export default function AppointmentDetailsModal({
   open,
   appointmentId,
   isReceptionist,
+  canManageDeposit = false,
   onClose,
   onUpdated,
 }: AppointmentDetailsModalProps) {
@@ -166,6 +177,10 @@ export default function AppointmentDetailsModal({
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("pix");
 
+  const [showDepositForm, setShowDepositForm] = useState(false);
+  const [depositInput, setDepositInput] = useState("");
+  const [depositLoading, setDepositLoading] = useState(false);
+
   const loadAppointment = useCallback(async () => {
     if (!appointmentId) return;
 
@@ -183,6 +198,8 @@ export default function AppointmentDetailsModal({
           notes,
           payment_method,
           completed_at,
+          deposit_amount,
+          deposit_paid_at,
           clients (
             id,
             full_name,
@@ -237,6 +254,8 @@ export default function AppointmentDetailsModal({
     setShowEdit(false);
     setShowReschedule(false);
     setPaymentMethod("pix");
+    setShowDepositForm(false);
+    setDepositInput("");
   }, [open]);
 
 
@@ -456,6 +475,55 @@ export default function AppointmentDetailsModal({
     }
   }
 
+  function openDepositForm() {
+    const current =
+      appointment?.deposit_amount == null
+        ? DEFAULT_DEPOSIT_AMOUNT
+        : Number(appointment.deposit_amount);
+
+    setDepositInput(current.toFixed(2).replace(".", ","));
+    setError("");
+    setSuccess("");
+    setShowDepositForm(true);
+  }
+
+  async function saveDeposit(amount: number | null) {
+    if (!appointment) return;
+
+    if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
+      setError("Informe um valor de sinal maior que zero.");
+      return;
+    }
+
+    setDepositLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const { error: depositError } = await supabase.rpc(
+        "set_appointment_deposit",
+        {
+          p_appointment_id: appointment.id,
+          p_amount: amount,
+        }
+      );
+
+      if (depositError) {
+        throw depositError;
+      }
+
+      setSuccess(amount === null ? "Sinal removido." : "Sinal registrado.");
+      setShowDepositForm(false);
+      await loadAppointment();
+      await onUpdated();
+    } catch (depositError) {
+      console.error("Erro ao salvar sinal:", depositError);
+      setError("Não foi possível salvar o sinal.");
+    } finally {
+      setDepositLoading(false);
+    }
+  }
+
   const client =
     appointment
       ? getRelation(
@@ -486,6 +554,19 @@ export default function AppointmentDetailsModal({
     ) ?? 0;
 
   const studioTotal = grossTotal - professionalTotal;
+
+  const depositAmount =
+    appointment?.deposit_amount == null
+      ? null
+      : Number(appointment.deposit_amount);
+
+  const remainingAfterDeposit = Math.max(
+    grossTotal - (depositAmount ?? 0),
+    0
+  );
+
+  const canEditDeposit =
+    canManageDeposit && appointment?.status !== "completed";
 
   if (!open || !appointmentId) return null;
 
@@ -668,6 +749,102 @@ export default function AppointmentDetailsModal({
                 )}
               </InfoSection>
 
+              {(depositAmount !== null || canEditDeposit) && (
+                <InfoSection title="Sinal" icon={HandCoins}>
+                  {showDepositForm ? (
+                    <div className="rounded-xl border border-[#C9A227]/30 bg-[#C9A227]/5 p-4">
+                      <label className="block text-xs font-semibold text-black/55">
+                        Valor do sinal pago (R$)
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={depositInput}
+                        onChange={(event) => setDepositInput(event.target.value)}
+                        disabled={depositLoading}
+                        className="mt-2 h-12 w-full rounded-xl border border-black/10 bg-white px-4 text-sm text-[#111] outline-none focus:border-[#C9A227] disabled:opacity-60"
+                      />
+                      <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setShowDepositForm(false)}
+                          disabled={depositLoading}
+                          className="h-11 rounded-xl border border-black/10 px-5 text-sm font-medium text-black/55 disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void saveDeposit(parseMoney(depositInput))}
+                          disabled={depositLoading}
+                          className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#111] px-5 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {depositLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          Salvar sinal
+                        </button>
+                      </div>
+                    </div>
+                  ) : depositAmount !== null ? (
+                    <div className="rounded-xl border border-[#C9A227]/40 bg-[#C9A227]/10 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[#111]">
+                            Sinal pago: {formatCurrency(depositAmount)}
+                          </p>
+                          {appointment.deposit_paid_at && (
+                            <p className="mt-1 text-xs text-black/45">
+                              Registrado em {formatDateTimeShort(appointment.deposit_paid_at)}
+                            </p>
+                          )}
+                        </div>
+                        {appointment.status !== "completed" && (
+                          <p className="text-right text-sm text-[#111]">
+                            Restante a cobrar:{" "}
+                            <strong>{formatCurrency(remainingAfterDeposit)}</strong>
+                          </p>
+                        )}
+                      </div>
+
+                      {canEditDeposit && (
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={openDepositForm}
+                            disabled={depositLoading}
+                            className="h-9 rounded-lg border border-black/10 bg-white px-4 text-xs font-semibold text-black/60 disabled:opacity-50"
+                          >
+                            Alterar valor
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void saveDeposit(null)}
+                            disabled={depositLoading}
+                            className="h-9 rounded-lg border border-red-200 bg-white px-4 text-xs font-semibold text-red-600 disabled:opacity-50"
+                          >
+                            Remover sinal
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 p-4">
+                      <p className="text-sm text-black/45">
+                        Nenhum sinal registrado.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openDepositForm}
+                        disabled={depositLoading}
+                        className="flex h-10 items-center justify-center gap-2 rounded-xl border border-[#C9A227]/40 bg-[#C9A227]/5 px-4 text-sm font-semibold text-[#8A6D0A] hover:bg-[#C9A227]/10 disabled:opacity-50"
+                      >
+                        <HandCoins className="h-4 w-4" />
+                        Registrar sinal
+                      </button>
+                    </div>
+                  )}
+                </InfoSection>
+              )}
+
               {!isReceptionist && (
                 <InfoSection
                   title={appointment.status === "completed" ? "Financeiro" : "Valores previstos"}
@@ -711,6 +888,14 @@ export default function AppointmentDetailsModal({
                     Ao concluir, o atendimento será contabilizado no
                     faturamento e a comissão da profissional será calculada.
                   </p>
+
+                  {depositAmount !== null && (
+                    <div className="mt-4 rounded-xl border border-[#C9A227]/40 bg-white px-4 py-3 text-sm text-[#111]">
+                      Sinal já pago: <strong>{formatCurrency(depositAmount)}</strong>
+                      {" · "}
+                      Cobrar agora: <strong>{formatCurrency(remainingAfterDeposit)}</strong>
+                    </div>
+                  )}
 
                   <label className="mt-5 block text-xs font-semibold text-black/55">
                     Forma de pagamento
@@ -1039,6 +1224,29 @@ function formatTime(value: string) {
     hour12: false,
     timeZone: "America/Sao_Paulo",
   }).format(new Date(value));
+}
+
+function formatDateTimeShort(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(value));
+}
+
+/*
+ * Aceita "20", "20,50", "20.50" e "R$ 1.020,50".
+ */
+function parseMoney(value: string) {
+  const cleaned = value.replace(/[^\d,.-]/g, "");
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+
+  return Number(normalized);
 }
 
 function getStatusSuccessMessage(status: AppointmentStatus) {

@@ -125,6 +125,23 @@ type ProfessionalService = {
   service: Service;
 };
 
+/*
+ * Valor padrão do sinal (R$ 20), editável no formulário.
+ */
+const DEFAULT_DEPOSIT_INPUT = "20,00";
+
+/*
+ * Aceita "20", "20,50", "20.50" e "R$ 1.020,50".
+ */
+function parseMoney(value: string) {
+  const cleaned = value.replace(/[^\d,.-]/g, "");
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+
+  return Number(normalized);
+}
+
 /* ============================================================
    COMPONENTE
 ============================================================ */
@@ -231,6 +248,22 @@ export default function NewAppointmentModal({
     setNotes,
   ] =
     useState("");
+
+  /*
+   * Sinal pago no momento do agendamento
+   * (somente admin e recepção).
+   */
+  const [
+    depositPaid,
+    setDepositPaid,
+  ] =
+    useState(false);
+
+  const [
+    depositInput,
+    setDepositInput,
+  ] =
+    useState(DEFAULT_DEPOSIT_INPUT);
 
   /* ==========================================================
      ESTADO DA UI
@@ -795,6 +828,14 @@ export default function NewAppointmentModal({
       ""
     );
 
+    setDepositPaid(
+      false
+    );
+
+    setDepositInput(
+      DEFAULT_DEPOSIT_INPUT
+    );
+
     setError(
       ""
     );
@@ -908,6 +949,27 @@ export default function NewAppointmentModal({
       return;
     }
 
+    const registerDeposit =
+      canChooseProfessional &&
+      depositPaid;
+
+    const depositAmount =
+      parseMoney(
+        depositInput
+      );
+
+    if (
+      registerDeposit &&
+      (!Number.isFinite(depositAmount) ||
+        depositAmount <= 0)
+    ) {
+      setError(
+        "Informe um valor de sinal maior que zero."
+      );
+
+      return;
+    }
+
     setLoading(
       true
     );
@@ -922,6 +984,8 @@ export default function NewAppointmentModal({
         `${appointmentDate}T${appointmentTime}:00-03:00`;
 
       const {
+        data:
+        createdAppointmentId,
         error:
         rpcError,
       } =
@@ -982,6 +1046,50 @@ export default function NewAppointmentModal({
         }
 
         throw rpcError;
+      }
+
+      /*
+       * Sinal: registrado logo após criar.
+       * O agendamento já existe, então uma falha aqui
+       * não pode deixar o formulário pronto para reenviar.
+       */
+      if (
+        registerDeposit
+      ) {
+        const {
+          error:
+          depositError,
+        } =
+          typeof createdAppointmentId === "string"
+            ? await supabase.rpc(
+                "set_appointment_deposit",
+                {
+                  p_appointment_id:
+                    createdAppointmentId,
+
+                  p_amount:
+                    depositAmount,
+                }
+              )
+            : {
+                error:
+                  new Error(
+                    "Função de criação não retornou o id do agendamento."
+                  ),
+              };
+
+        if (
+          depositError
+        ) {
+          console.error(
+            "Erro ao registrar sinal:",
+            depositError
+          );
+
+          window.alert(
+            "O agendamento foi criado, mas não foi possível registrar o sinal. Abra o agendamento e use \"Registrar sinal\"."
+          );
+        }
       }
 
       setSuccess(
@@ -1838,6 +1946,110 @@ export default function NewAppointmentModal({
                     "
                   />
                 </FormSection>
+
+                {/* ==================================================
+                    SINAL (admin e recepção)
+                =================================================== */}
+
+                {canChooseProfessional && (
+                  <FormSection
+                    number="06"
+                    title="Sinal"
+                    optional
+                  >
+                    <label
+                      className="
+                        flex
+                        cursor-pointer
+                        items-center
+                        gap-3
+                        rounded-xl
+                        border
+                        border-black/10
+                        bg-white
+                        px-4
+                        py-3
+                        text-sm
+                        font-medium
+                        text-[#111]
+                      "
+                    >
+                      <input
+                        type="checkbox"
+                        checked={
+                          depositPaid
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setDepositPaid(
+                            event
+                              .target
+                              .checked
+                          )
+                        }
+                        className="
+                          h-4
+                          w-4
+                          accent-[#C9A227]
+                        "
+                      />
+                      Cliente já pagou sinal
+                    </label>
+
+                    {depositPaid && (
+                      <div className="mt-3">
+                        <label
+                          className="
+                            block
+                            text-xs
+                            font-semibold
+                            text-black/55
+                          "
+                        >
+                          Valor do sinal (R$)
+                        </label>
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={
+                            depositInput
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setDepositInput(
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          className="
+                            mt-2
+                            h-12
+                            w-full
+                            rounded-xl
+                            border
+                            border-black/10
+                            bg-white
+                            px-4
+                            text-base
+                            text-[#111]
+                            outline-none
+                            transition-all
+
+                            focus:border-[#C9A227]/60
+                            focus:ring-2
+                            focus:ring-[#C9A227]/10
+
+                            sm:text-sm
+                          "
+                        />
+                      </div>
+                    )}
+                  </FormSection>
+                )}
 
                 {/* ==================================================
                     ERRO

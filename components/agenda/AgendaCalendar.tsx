@@ -216,6 +216,16 @@ type AppointmentRow = {
 
 
 
+  deposit_amount:
+
+    | number
+
+    | string
+
+    | null;
+
+
+
   clients:
 
     SupabaseRelation<ClientRelation>;
@@ -299,6 +309,17 @@ type CalendarEvent = {
     price:
 
       number;
+
+
+
+    /*
+     * Sinal pago pela cliente (null = sem sinal).
+     */
+    depositAmount:
+
+      | number
+
+      | null;
 
   };
 
@@ -714,6 +735,8 @@ export default function AgendaCalendar({
 
                 notes,
 
+                deposit_amount,
+
 
 
                 clients (
@@ -937,6 +960,19 @@ export default function AgendaCalendar({
                           0
 
                       ),
+
+
+
+                    depositAmount:
+
+                      appointment.deposit_amount ==
+                      null
+
+                        ? null
+
+                        : Number(
+                            appointment.deposit_amount
+                          ),
 
                   },
 
@@ -2442,6 +2478,8 @@ export default function AgendaCalendar({
 
                           className="
 
+                            min-w-0
+
                             truncate
 
                             text-[12px]
@@ -2460,6 +2498,12 @@ export default function AgendaCalendar({
                           }
 
                         </span>
+
+                        <DepositBadge
+                          amount={
+                            props.depositAmount
+                          }
+                        />
 
                       </div>
 
@@ -2606,6 +2650,7 @@ export default function AgendaCalendar({
 
                       <span
                         className="
+                          min-w-0
                           truncate
                           text-[12px]
                           font-bold
@@ -2616,6 +2661,12 @@ export default function AgendaCalendar({
                           props.clientName
                         }
                       </span>
+
+                      <DepositBadge
+                        amount={
+                          props.depositAmount
+                        }
+                      />
                     </div>
                   );
                 }
@@ -2667,30 +2718,47 @@ export default function AgendaCalendar({
 
 
 
-                    <p
-
+                    <div
                       className="
-
-                        truncate
-
-                        leading-tight
-
-                        text-[12px]
-
-                        font-bold
-                        text-[#111111]
-
+                        flex
+                        min-w-0
+                        items-center
+                        gap-1
                       "
-
                     >
+                      <p
 
-                      {
+                        className="
 
-                        props.clientName
+                          min-w-0
 
-                      }
+                          truncate
 
-                    </p>
+                          leading-tight
+
+                          text-[12px]
+
+                          font-bold
+                          text-[#111111]
+
+                        "
+
+                      >
+
+                        {
+
+                          props.clientName
+
+                        }
+
+                      </p>
+
+                      <DepositBadge
+                        amount={
+                          props.depositAmount
+                        }
+                      />
+                    </div>
 
 
 
@@ -2911,6 +2979,11 @@ export default function AgendaCalendar({
       <AppointmentDetailsModal
 
         isReceptionist={isReceptionist}
+
+        canManageDeposit={
+          currentUserRole === "admin" ||
+          isReceptionist
+        }
 
         open={
 
@@ -3272,4 +3345,56 @@ function getAppointmentColors(
 
   };
 
+}
+
+
+/* ============================================================
+   SELO DE SINAL
+
+   Aparece ao lado do nome da cliente quando ela pagou
+   sinal, para quem for cobrar saber o valor já recebido.
+============================================================ */
+
+function DepositBadge({
+  amount,
+}: {
+  amount: number | null;
+}) {
+  if (
+    amount == null
+  ) {
+    return null;
+  }
+
+  const fullValue =
+    new Intl.NumberFormat(
+      "pt-BR",
+      {
+        style: "currency",
+        currency: "BRL",
+      }
+    ).format(amount);
+
+  const shortValue =
+    Number.isInteger(amount)
+      ? `R$ ${amount}`
+      : fullValue;
+
+  return (
+    <span
+      title={`Sinal pago: ${fullValue}`}
+      className="
+        shrink-0
+        rounded
+        bg-[#C9A227]
+        px-1
+        text-[9px]
+        font-bold
+        leading-[14px]
+        text-[#111111]
+      "
+    >
+      $ {shortValue}
+    </span>
+  );
 }
